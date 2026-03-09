@@ -10,7 +10,7 @@ bedrock_agentcore = boto3.client("bedrock-agentcore")
 s3 = boto3.client("s3")
 table = dynamodb.Table(os.environ["LEADERBOARD_TABLE"])
 game_state_table = dynamodb.Table(os.environ["GAME_STATE_TABLE"])
-code_interpreter_id = os.environ["CODE_INTERPRETER_ID"]
+code_interpreter_id = "aws.codeinterpreter.v1"
 problems_bucket = os.environ["PROBLEMS_BUCKET"]
 
 HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}

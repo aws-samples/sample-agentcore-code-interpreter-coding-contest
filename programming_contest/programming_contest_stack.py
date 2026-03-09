@@ -5,7 +5,6 @@ from aws_cdk import (
     Duration,
     Stack,
     aws_apigateway,
-    aws_bedrockagentcore,
     aws_cloudfront,
     aws_cloudfront_origins,
     aws_dynamodb,
@@ -65,16 +64,6 @@ class ProgrammingContestStack(Stack):
             ),
         )
 
-        # Code Interpreter
-        code_interpreter = aws_bedrockagentcore.CfnCodeInterpreterCustom(
-            self,
-            "CodeInterpreter",
-            name="contest_interpreter",
-            network_configuration=aws_bedrockagentcore.CfnCodeInterpreterCustom.CodeInterpreterNetworkConfigurationProperty(
-                network_mode="SANDBOX"
-            ),
-        )
-
         # S3 Buckets
         website_bucket = aws_s3.Bucket(self, "WebsiteBucket", block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL)
 
@@ -91,7 +80,6 @@ class ProgrammingContestStack(Stack):
             environment={
                 "LEADERBOARD_TABLE": leaderboard_table.table_name,
                 "GAME_STATE_TABLE": game_state_table.table_name,
-                "CODE_INTERPRETER_ID": code_interpreter.attr_code_interpreter_id,
                 "PROBLEMS_BUCKET": problems_bucket.bucket_name,
             },
         )
@@ -103,7 +91,9 @@ class ProgrammingContestStack(Stack):
                     "bedrock-agentcore:InvokeCodeInterpreter",
                     "bedrock-agentcore:StopCodeInterpreterSession",
                 ],
-                resources=[code_interpreter.attr_code_interpreter_arn],
+                resources=[
+                    f"arn:aws:bedrock-agentcore:{self.region}:aws:code-interpreter/aws.codeinterpreter.v1"
+                ],
             )
         )
 
