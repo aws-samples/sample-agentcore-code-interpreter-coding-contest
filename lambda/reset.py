@@ -3,6 +3,8 @@ import os
 
 import boto3
 
+from admin_auth import require_admin_auth
+
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["LEADERBOARD_TABLE"])
 
@@ -10,6 +12,10 @@ HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*
 
 
 def handler(event, context):
+    auth_error = require_admin_auth(event)
+    if auth_error:
+        return auth_error
+
     try:
         response = table.scan()
         with table.batch_writer() as batch:

@@ -1,9 +1,9 @@
+import base64
 import subprocess
 import sys
 
 from aws_cdk import (
     CfnOutput,
-    CfnParameter,
     CustomResource,
     Duration,
     Stack,
@@ -36,41 +36,25 @@ from aws_cdk import (
     aws_s3_deployment as s3deploy,
 )
 from aws_cdk import (
-    aws_ssm as ssm,
-)
-from aws_cdk import (
     custom_resources as cr,
 )
 from constructs import Construct
 
 
 class ProgrammingContestStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        admin_username: str = "admin",
+        admin_password: str = "password",
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Run build script to prepare deployment sources
         subprocess.run([sys.executable, "scripts/build_contents.py"], check=True)
-
-        # CloudFormation Parameters
-        admin_username_param = CfnParameter(
-            self,
-            "AdminUsername",
-            type="String",
-            description="Admin username for Basic Auth",
-            no_echo=False,
-            min_length=1,
-            constraint_description="Admin username is required",
-        )
-
-        admin_password_param = CfnParameter(
-            self,
-            "AdminPassword",
-            type="String",
-            description="Admin password for Basic Auth",
-            no_echo=True,
-            min_length=8,
-            constraint_description="Admin password must be at least 8 characters",
-        )
 
         # DynamoDB tables
         leaderboard_table = dynamodb.Table(
@@ -224,48 +208,46 @@ def handler(event, context):
             default_cors_preflight_options=apigw.CorsOptions(
                 allow_origins=apigw.Cors.ALL_ORIGINS,
                 allow_methods=apigw.Cors.ALL_METHODS,
-                allow_headers=["Content-Type"],
+                allow_headers=["Content-Type", "Authorization"],
             ),
         )
 
+        admin_auth_token = base64.b64encode(f"{admin_username}:{admin_password}".encode()).decode()
+
         api.root.add_resource("submit").add_method("POST", apigw.LambdaIntegration(submit_lambda))
         api.root.add_resource("leaderboard").add_method("GET", apigw.LambdaIntegration(leaderboard_lambda))
-        api.root.add_resource("reset").add_method("POST", apigw.LambdaIntegration(reset_lambda))
         api.root.add_resource("problems").add_method("GET", apigw.LambdaIntegration(problems_lambda))
 
         game_state_resource = api.root.add_resource("game-state")
         game_state_resource.add_method("GET", apigw.LambdaIntegration(game_state_lambda))
+
+        # Admin endpoints - Lambda checks Authorization header
+        for fn in [reset_lambda, game_state_lambda]:
+            fn.add_environment("ADMIN_AUTH_TOKEN", f"Basic {admin_auth_token}")
+
+        api.root.add_resource("reset").add_method("POST", apigw.LambdaIntegration(reset_lambda))
         game_state_resource.add_method("POST", apigw.LambdaIntegration(game_state_lambda))
 
-        # Lambda@Edge for Basic Auth
-        username_param = ssm.StringParameter(
-            self,
-            "AdminUsernameSSM",
-            parameter_name="/coding-contest/admin-username",
-            string_value=admin_username_param.value_as_string,
-        )
-
-        password_param = ssm.StringParameter(
-            self,
-            "AdminPasswordSSM",
-            parameter_name="/coding-contest/admin-password",
-            string_value=admin_password_param.value_as_string,
-            tier=ssm.ParameterTier.STANDARD,
-        )
-
-        basic_auth_lambda = _lambda.Function(
+        # CloudFront Functions for Basic Auth
+        auth_string = base64.b64encode(f"{admin_username}:{admin_password}".encode()).decode()
+        basic_auth_function = cloudfront.Function(
             self,
             "BasicAuthFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="basic_auth.handler",
-            code=_lambda.Code.from_asset("lambda_edge"),
-            timeout=Duration.seconds(5),
+            code=cloudfront.FunctionCode.from_inline(f"""\
+function handler(event) {{
+  var request = event.request;
+  var uri = request.uri;
+  if (uri !== '/admin.html' && !uri.endsWith('/admin.html')) return request;
+  var expected = 'Basic {auth_string}';
+  var auth = request.headers.authorization;
+  if (auth && auth.value === expected) return request;
+  return {{
+    statusCode: 401,
+    statusDescription: 'Unauthorized',
+    headers: {{ 'www-authenticate': {{ value: 'Basic realm="Admin Area"' }} }}
+  }};
+}}"""),
         )
-
-        username_param.grant_read(basic_auth_lambda)
-        password_param.grant_read(basic_auth_lambda)
-
-        basic_auth_version = basic_auth_lambda.current_version
 
         # CloudFront
         distribution = cloudfront.Distribution(
@@ -274,10 +256,10 @@ def handler(event, context):
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(website_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-                edge_lambdas=[
-                    cloudfront.EdgeLambda(
-                        function_version=basic_auth_version,
-                        event_type=cloudfront.LambdaEdgeEventType.VIEWER_REQUEST,
+                function_associations=[
+                    cloudfront.FunctionAssociation(
+                        function=basic_auth_function,
+                        event_type=cloudfront.FunctionEventType.VIEWER_REQUEST,
                     )
                 ],
             ),

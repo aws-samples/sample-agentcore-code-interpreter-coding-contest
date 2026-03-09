@@ -46,7 +46,7 @@ uv run python -m pytest contents/<problem-name>/test_solver.py -v --rootdir=cont
 ```bash
 uv sync
 uv run cdk bootstrap  # 初回のみ
-uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+uv run cdk deploy -c adminUsername=<ユーザー名> -c adminPassword=<セキュアなパスワード>
 ```
 
 ## 使用方法

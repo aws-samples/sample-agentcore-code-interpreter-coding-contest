@@ -3,6 +3,8 @@ import os
 
 import boto3
 
+from admin_auth import require_admin_auth
+
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["GAME_STATE_TABLE"])
 
@@ -19,6 +21,10 @@ def handler(event, context):
             return {"statusCode": 200, "headers": HEADERS, "body": json.dumps({"is_active": is_active})}
 
         elif http_method == "POST":
+            auth_error = require_admin_auth(event)
+            if auth_error:
+                return auth_error
+
             body = json.loads(event["body"])
             is_active = body.get("is_active", True)
             table.put_item(Item={"state_key": "game_active", "value": is_active})

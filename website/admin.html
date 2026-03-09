@@ -36,6 +36,16 @@
 
     <script>
         const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
+
+        // Basic Auth credentials (same as CloudFront auth)
+        // This page is already protected by Basic Auth, so the user has these credentials
+        const stored = sessionStorage.getItem('adminAuth');
+        const auth = stored || (() => {
+            const cred = prompt('管理者認証 (user:pass)');
+            if (cred) sessionStorage.setItem('adminAuth', cred);
+            return cred;
+        })();
+        const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(auth || '') };
         
         const statusBadge = document.getElementById('statusBadge');
         const startBtn = document.getElementById('startBtn');
@@ -72,7 +82,7 @@
             try {
                 const response = await fetch(`${API_URL}/game-state`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: ADMIN_HEADERS,
                     body: JSON.stringify({ is_active: isActive })
                 });
                 const data = await response.json();
@@ -88,7 +98,7 @@
             try {
                 const response = await fetch(`${API_URL}/reset`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: ADMIN_HEADERS
                 });
                 if (response.ok) {
                     alert('✅ リーダーボードをリセットしました');
