@@ -3,7 +3,7 @@ class AppHeader extends HTMLElement {
     connectedCallback() {
         this.innerHTML = `
             <div class="header">
-                <h1>Code Interpreter Coding Contest</h1>
+                <h1>Prompt Jam</h1>
                 <p>最速で問題を解こう！</p>
             </div>
         `;
