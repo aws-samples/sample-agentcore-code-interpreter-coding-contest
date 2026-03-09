@@ -1,0 +1,2 @@
+def solver():
+    return "イギリス"

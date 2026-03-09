@@ -1,90 +1,82 @@
 import json
-import boto3
 import os
-from decimal import Decimal
 import traceback
 from collections import defaultdict
+from decimal import Decimal
 
-dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table(os.environ['LEADERBOARD_TABLE'])
+import boto3
 
-def decimal_default(obj):
+dynamodb = boto3.resource("dynamodb")
+s3 = boto3.client("s3")
+table = dynamodb.Table(os.environ["LEADERBOARD_TABLE"])
+problems_bucket = os.environ["PROBLEMS_BUCKET"]
+
+HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+
+
+def _get_enabled_problem_ids():
+    paginator = s3.get_paginator("list_objects_v2")
+    problem_ids = []
+    for page in paginator.paginate(Bucket=problems_bucket, Delimiter="/"):
+        for prefix in page.get("CommonPrefixes", []):
+            pid = prefix["Prefix"].rstrip("/")
+            try:
+                obj = s3.get_object(Bucket=problems_bucket, Key=f"{pid}/metadata.json")
+                metadata = json.loads(obj["Body"].read())
+                if metadata.get("enabled", False):
+                    problem_ids.append((pid, metadata.get("order", 999)))
+            except Exception:
+                continue
+    problem_ids.sort(key=lambda x: x[1])
+    return [pid for pid, _ in problem_ids]
+
+
+def _decimal_default(obj):
     if isinstance(obj, Decimal):
         return int(obj)
     raise TypeError
 
+
 def handler(event, context):
     try:
+        problem_ids = _get_enabled_problem_ids()
+
         response = table.scan()
-        items = response.get('Items', [])
-        
-        # ユーザーごとに集計
-        user_data = defaultdict(lambda: {'problem1_time': None, 'problem2_time': None, 'problem3_time': None, 'problem4_time': None})
-        
+        items = response.get("Items", [])
+
+        user_data = defaultdict(dict)
         for item in items:
-            username = item.get('username', '')
-            problem_number = int(item.get('problem_number', 0))
-            timestamp = item.get('timestamp', '')
-            
-            if problem_number == 1:
-                user_data[username]['problem1_time'] = timestamp
-            elif problem_number == 2:
-                user_data[username]['problem2_time'] = timestamp
-            elif problem_number == 3:
-                user_data[username]['problem3_time'] = timestamp
-            elif problem_number == 4:
-                user_data[username]['problem4_time'] = timestamp
-        
-        # 結果を構築
+            username = item.get("username", "")
+            problem_id = item.get("problem_id", "")
+            timestamp = item.get("timestamp", "")
+            user_data[username][problem_id] = timestamp
+
         result = []
-        for username, data in user_data.items():
-            # 各ユーザーの解いた問題数と最新のクリア時間を取得
-            times = [data['problem1_time'], data['problem2_time'], data['problem3_time'], data['problem4_time']]
-            valid_times = [t for t in times if t is not None]
-            solved_count = len(valid_times)
-            latest_time = max(valid_times) if valid_times else None
-            
-            # タイムスタンプをHH:mm:ss形式に変換
-            def format_time(timestamp):
-                if timestamp is None:
-                    return None
-                # "YYYY-MM-DD HH:MM:SS JST" から "HH:MM:SS" を抽出
-                parts = timestamp.split(' ')
-                if len(parts) >= 2:
-                    return parts[1]
-                return timestamp
-            
-            entry = {
-                'username': username,
-                'problem1_time': format_time(data['problem1_time']),
-                'problem2_time': format_time(data['problem2_time']),
-                'problem3_time': format_time(data['problem3_time']),
-                'problem4_time': format_time(data['problem4_time']),
-                'solved_count': solved_count,
-                'latest_time': latest_time
-            }
+        for username, solved in user_data.items():
+            entry = {"username": username}
+            valid_times = []
+            for pid in problem_ids:
+                ts = solved.get(pid)
+                if ts:
+                    # "YYYY-MM-DD HH:MM:SS JST" -> "HH:MM:SS"
+                    parts = ts.split(" ")
+                    entry[pid] = parts[1] if len(parts) >= 2 else ts
+                    valid_times.append(ts)
+                else:
+                    entry[pid] = None
+
+            entry["solved_count"] = len(valid_times)
+            entry["latest_time"] = max(valid_times) if valid_times else None
             result.append(entry)
-        
-        # 解いた問題数で降順、同じ場合は最新クリア時間で昇順ソート
-        result.sort(key=lambda x: (-x['solved_count'], x['latest_time'] if x['latest_time'] else 'z'))
-        
+
+        result.sort(key=lambda x: (-x["solved_count"], x["latest_time"] or "z"))
+
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(result, default=decimal_default)
+            "statusCode": 200,
+            "headers": HEADERS,
+            "body": json.dumps({"leaderboard": result, "problem_ids": problem_ids}, default=_decimal_default),
         }
-        
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error: {e}")
         print(traceback.format_exc())
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': str(e), 'trace': traceback.format_exc()})
-        }
+        return {"statusCode": 500, "headers": HEADERS, "body": json.dumps({"error": str(e)})}

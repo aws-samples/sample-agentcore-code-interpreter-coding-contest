@@ -39,15 +39,15 @@ paths:
               type: object
               required:
                 - username
-                - problem_number
+                - problem_id
                 - code
               properties:
                 username:
                   type: string
                   example: "your_username"
-                problem_number:
-                  type: integer
-                  example: 1
+                problem_id:
+                  type: string
+                  example: "bracket-depth"
                 code:
                   type: string
                   example: "def solver(s):\\n    return \\"result\\""
@@ -61,7 +61,7 @@ paths:
                 properties:
                   result:
                     type: string
-                    enum: [correct, incorrect]
+                    enum: [correct, incorrect, error]
                   message:
                     type: string</code></pre>
                         <button onclick="copyCode('api-example')" class="copy-btn">コピー</button>
@@ -87,14 +87,11 @@ paths:
 
         function copyCode(elementId) {
             const codeElement = document.getElementById(elementId);
-            const text = codeElement.textContent;
-            navigator.clipboard.writeText(text).then(() => {
+            navigator.clipboard.writeText(codeElement.textContent).then(() => {
                 const btn = codeElement.parentElement.querySelector('.copy-btn');
-                const originalText = btn.textContent;
+                const orig = btn.textContent;
                 btn.textContent = '✅ コピー済み';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
+                setTimeout(() => { btn.textContent = orig; }, 2000);
             });
         }
 
@@ -102,33 +99,20 @@ paths:
             try {
                 const response = await fetch(`${API_URL}/game-state`);
                 const data = await response.json();
-                const statusElement = document.getElementById('gameStatus');
-                
+                const el = document.getElementById('gameStatus');
                 if (data.is_active) {
-                    statusElement.textContent = '進行中';
-                    statusElement.style.backgroundColor = '#28a745';
+                    el.textContent = '進行中';
+                    el.style.backgroundColor = '#28a745';
                 } else {
-                    statusElement.textContent = '終了';
-                    statusElement.style.backgroundColor = '#dc3545';
+                    el.textContent = '終了';
+                    el.style.backgroundColor = '#dc3545';
                 }
-                statusElement.style.color = 'white';
+                el.style.color = 'white';
             } catch (error) {
-                const statusElement = document.getElementById('gameStatus');
-                statusElement.textContent = '進行中';
-                statusElement.style.backgroundColor = '#28a745';
-                statusElement.style.color = 'white';
-            }
-        }
-
-        let problemCount = 0;
-
-        async function loadProblems() {
-            try {
-                const response = await fetch('problems.json');
-                const problems = await response.json();
-                problemCount = Object.keys(problems).length;
-            } catch (error) {
-                problemCount = 4;
+                const el = document.getElementById('gameStatus');
+                el.textContent = '取得失敗';
+                el.style.backgroundColor = '#6c757d';
+                el.style.color = 'white';
             }
         }
 
@@ -138,60 +122,51 @@ paths:
                 const data = await response.json();
                 const container = document.getElementById('leaderboard-content');
                 container.textContent = '';
-                
-                if (data.length === 0) {
+
+                const entries = data.leaderboard || [];
+                const problemIds = data.problem_ids || [];
+
+                if (entries.length === 0) {
                     const div = document.createElement('div');
                     div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
-                    div.textContent = 'まだ提出がありません';
-                    const br = document.createElement('br');
-                    div.appendChild(br);
-                    div.appendChild(document.createTextNode('最初の挑戦者になりましょう！'));
+                    div.textContent = 'まだ提出がありません。最初の挑戦者になりましょう！';
                     container.appendChild(div);
                     return;
                 }
-                
+
                 const table = document.createElement('table');
                 const headerRow = document.createElement('tr');
-                const headers = ['順位', 'ユーザー名'];
-                for (let i = 1; i <= problemCount; i++) {
-                    headers.push(`問題${i}`);
-                }
-                headers.forEach(text => {
+                ['順位', 'ユーザー名', ...problemIds].forEach(text => {
                     const th = document.createElement('th');
                     th.textContent = text;
                     headerRow.appendChild(th);
                 });
                 table.appendChild(headerRow);
-                
-                data.forEach((entry, index) => {
+
+                entries.forEach((entry, index) => {
                     const row = document.createElement('tr');
-                    const td1 = document.createElement('td');
-                    td1.textContent = index + 1;
-                    row.appendChild(td1);
-                    const td2 = document.createElement('td');
-                    td2.textContent = entry.username;
-                    row.appendChild(td2);
-                    for (let i = 1; i <= problemCount; i++) {
+                    const rankTd = document.createElement('td');
+                    rankTd.textContent = index + 1;
+                    row.appendChild(rankTd);
+                    const nameTd = document.createElement('td');
+                    nameTd.textContent = entry.username;
+                    row.appendChild(nameTd);
+                    problemIds.forEach(pid => {
                         const td = document.createElement('td');
-                        td.textContent = entry[`problem${i}_time`] || '-';
+                        td.textContent = entry[pid] || '-';
                         row.appendChild(td);
-                    }
+                    });
                     table.appendChild(row);
                 });
-                
+
                 container.appendChild(table);
             } catch (error) {
                 document.getElementById('leaderboard-content').textContent = 'リーダーボードの読み込みに失敗しました';
             }
         }
 
-        // 初期化
-        loadProblems().then(() => {
-            loadGameStatus();
-            loadLeaderboard();
-        });
-        
-        // 5秒ごとに更新
+        loadGameStatus();
+        loadLeaderboard();
         setInterval(() => {
             loadGameStatus();
             loadLeaderboard();

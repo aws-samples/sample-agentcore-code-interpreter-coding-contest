@@ -17,6 +17,7 @@
 - AWS CLI
 - Node.js 18以上
 - Python 3.11以上
+- uv（Pythonパッケージマネージャー）
 - AWS CDK CLI
 
 ---
@@ -26,10 +27,10 @@
 ### 1. 初回セットアップ
 ```bash
 # Python依存関係インストール
-pip3 install -r requirements.txt
+uv sync
 
 # CDK Bootstrap（初回のみ、リージョンごとに1回）
-cdk bootstrap
+uv run cdk bootstrap
 ```
 
 ### 2. 認証情報の準備
@@ -39,7 +40,7 @@ cdk bootstrap
 
 ### 3. デプロイ実行
 ```bash
-cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 **重要**: パスワードに特殊文字が含まれる場合はシングルクォートで囲む
@@ -58,7 +59,7 @@ curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
   -H "Content-Type: application/json" \
   -d '{
     "username": "<username>",
-    "problem_number": <problem_number>,
+    "problem_id": "<problem_id>",
     "code": "<Python code>"
   }'
 ```
@@ -68,59 +69,97 @@ curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
 ## 問題編集方法
 
 ### 問題定義の場所
-`contents/problems.json`
+各問題は `contents/` 配下のディレクトリとして定義します。ディレクトリ名がそのまま問題ID（`problem_id`）になります。
 
-### 問題編集手順
+### ディレクトリ構造
 
-1. `contents/problems.json`を開く
-2. 問題を編集（テストケースのinput, outputはそれぞれ固定長で1になっています）
+```
+contents/
+├── bracket-depth/
+│   ├── metadata.json      # タイトル、説明、表示順、有効/無効
+│   ├── solver.py           # 正解コード（参照実装、デプロイしない）
+│   └── test_solver.py      # unittest形式のテストケース（採点に使用）
+├── country-quiz/
+│   ├── metadata.json
+│   ├── solver.py
+│   ├── test_solver.py
+│   └── assets/             # 画像等の静的アセット
+│       └── country.jpg
+└── ...
+```
 
+### 問題の追加手順
+
+1. `contents/` 配下に新しいディレクトリを作成（ディレクトリ名 = 問題ID）
+
+2. `metadata.json` を作成:
 ```json
 {
-  "問題番号": {
-    "title": "新しい問題名",
-    "description": [
-      "問題の説明文（複数行可）",
-      "HTMLタグも使用可能"
-    ],
-    "examples": [
-      {"input": "solver(123)", "output": "\"結果\""}
-    ],
-    "test_cases": [
-      ["入力1", "期待出力1"],
-      ["入力2", "期待出力2"]
-    ]
-  }
+  "title": "新しい問題名",
+  "order": 1,
+  "enabled": true,
+  "description": [
+    "問題の説明文（複数行可）",
+    "HTMLタグも使用可能"
+  ],
+  "examples": [
+    {"input": "solver(123)", "output": "\"結果\""}
+  ]
 }
 ```
 
-3. デプロイ
+- `order`: 表示順序を制御する整数
+- `enabled`: `false` にすると問題一覧に表示されず、提出も受け付けない
+
+3. `solver.py` を作成（正解コード）:
+```python
+def solver(s):
+    # 正解の実装
+    return result
+```
+
+4. `test_solver.py` を作成（unittest形式）:
+```python
+import unittest
+from solver import solver
+
+class TestSolver(unittest.TestCase):
+    def test_basic(self):
+        self.assertEqual(solver("input"), "expected_output")
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+5. ローカル検証:
 ```bash
-cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+uv run python -m pytest contents/<problem-name>/test_solver.py -v --rootdir=contents/<problem-name>
+```
+
+6. デプロイ:
+```bash
+uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 ### 問題タイプ
 
 **引数ありの問題**
-```json
-"test_cases": [
-  ["test_string", "result"],
-  [123, "result"]
-]
+```python
+def solver(s):
+    return "result"
 ```
 
 **引数なしの問題**
-```json
-"test_cases": [
-  [null, "result"]
-]
+```python
+def solver():
+    return "result"
 ```
 
 ### 画像の追加
-`contents/`ディレクトリに画像を配置し、descriptionで参照
+問題ディレクトリ内に `assets/` ディレクトリを作成し、画像を配置。`metadata.json` の description で参照:
 ```json
 "description": [
-  "<img src=\"image.png\" alt=\"説明\" style=\"max-width: 100%;\">"
+  "<img src=\"problem-id/assets/image.png\" alt=\"説明\" style=\"max-width: 100%;\">"
 ]
 ```
 
@@ -128,7 +167,7 @@ cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPasswo
 
 AI駆動で取り組む想定の問題になっています。
 
-#### 問題1
+#### bracket-depth（括弧ネスト深度）
 
 AIエージェントにそのまま問題文を渡してコーディングさせます。
 
@@ -138,12 +177,12 @@ curl -X POST https://xxxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
   -H "Content-Type: application/json" \
   -d '{
     "username": "user1",
-    "problem_number": 1,
-    "code": "def solver(s):\n    stack = []\n    pairs = {\")\": \"(\", \"}\": \"{\", \"]\": \"[\"}\n    max_depth = 0\n    for char in s:\n        if char in \"({[\":\n            stack.append(char)\n            max_depth = max(max_depth, len(stack))\n        elif char in \")}]\":\n            if not stack or stack[-1] != pairs[char]:\n                return \"-1\"\n            stack.pop()\n    return \"-1\" if stack else str(max_depth)"
+    "problem_id": "bracket-depth",
+    "code": "def solver(s):\n    stack = []\n    pairs = {\")\": \"(\", \"}\": \"{\", \"]\": \"[\"}\n    max_depth = 0\n    for char in s:\n        if char in \"({[\":\n            stack.append(char)\n            max_depth = max(max_depth, len(stack))\n        elif char in \")}]\":\n            if not stack or stack[-1] != pairs[char]:\n                return -1\n            stack.pop()\n    return -1 if stack else max_depth"
   }'
 ```
 
-### 問題2
+#### country-quiz（これはどこの国？）
 
 AIエージェントに画像を読み込ませて予想させます。
 
@@ -153,16 +192,14 @@ curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
   -H "Content-Type: application/json" \
   -d '{
     "username": "user1",
-    "problem_number": 2,
+    "problem_id": "country-quiz",
     "code": "def solver():\n    return \"イギリス\""
   }'
 ```
 
-### 問題3
+#### range-lookup（1,000,000→Free）
 
-CloudFrontの定額プランに関する問題です。
-入出力のサンプルをヒントにその法則を解明し、リクエスト数に対応するプラン名を返せれば正解となります。
-
+入出力のサンプルをヒントにその法則を解明し、数値に対応する文字列を返せれば正解となります。
 
 **回答例**
 ```bash
@@ -170,7 +207,7 @@ curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
   -H "Content-Type: application/json" \
   -d '{
     "username": "user1",
-    "problem_number": 3,
+    "problem_id": "range-lookup",
     "code": "def solver(n):\n    if n <= 1000000:\n        return \"Free\"\n    elif n <= 10000000:\n        return \"Pro\"\n    elif n <= 125000000:\n        return \"Business\"\n    elif n <= 500000000:\n        return \"Premium\"\n    else:\n        return \"担当SAにご相談ください\""
   }'
 ```
@@ -301,7 +338,7 @@ CloudWatch Logsで異常検知：
 aws apigateway update-stage --rest-api-id <API_ID> --stage-name prod --patch-operations op=replace,path=/throttle/rateLimit,value=0
 
 # 2. 環境削除
-cdk destroy
+uv run cdk destroy
 ```
 
 ---
@@ -332,7 +369,7 @@ cdk destroy
 3. スクリーンショット保存
 4. 環境削除（コスト削減）:
 ```bash
-cdk destroy
+uv run cdk destroy
 ```
 
 ---
@@ -344,13 +381,13 @@ cdk destroy
 **エラー: "Admin username is required", "Admin password must be at least 8 characters"**
 ```bash
 # 解決: 認証情報を適切に指定
-cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 **エラー: "CDK bootstrap required"**
 ```bash
 # 解決: Bootstrap実行
-cdk bootstrap
+uv run cdk bootstrap
 ```
 
 ### 実行時エラー

@@ -12,22 +12,43 @@
     <div class="container">
         <app-header></app-header>
         <app-nav current="problems"></app-nav>
-        <div class="content" id="problems-container"></div>
+        <div class="content" id="problems-container">読み込み中...</div>
     </div>
     <script>
-        fetch('/problems.json')
+        const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
+
+        fetch(`${API_URL}/problems`)
             .then(r => r.json())
-            .then(problems => {
+            .then(data => {
                 const container = document.getElementById('problems-container');
-                Object.entries(problems).sort(([a], [b]) => a - b).forEach(([num, p]) => {
+                container.textContent = '';
+
+                if (!data.game_active) {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
+                    div.textContent = 'ゲームは現在停止中です。開始後に問題が表示されます。';
+                    container.appendChild(div);
+                    return;
+                }
+
+                const problems = data.problems || [];
+                if (problems.length === 0) {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
+                    div.textContent = '問題がありません。';
+                    container.appendChild(div);
+                    return;
+                }
+
+                problems.forEach(p => {
                     const card = document.createElement('div');
                     card.className = 'problem-card';
                     card.innerHTML = `
-                        <h2 class="problem-title">問題${num}: ${p.title}</h2>
+                        <h2 class="problem-title">${p.title}</h2>
                         <div class="problem-description">
                             ${p.description.map(d => `<p>${d}</p>`).join('')}
                         </div>
-                        ${p.examples.map(ex => `
+                        ${(p.examples || []).map(ex => `
                             <div class="example">
                                 <strong>入力例:</strong> ${ex.input}<br>
                                 <strong>出力例:</strong> ${ex.output}
@@ -36,6 +57,9 @@
                     `;
                     container.appendChild(card);
                 });
+            })
+            .catch(() => {
+                document.getElementById('problems-container').textContent = '問題の読み込みに失敗しました';
             });
     </script>
 </body>

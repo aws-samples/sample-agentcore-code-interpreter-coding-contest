@@ -1,8 +1,8 @@
-const API_URL = 'https://9l2ww5xs2b.execute-api.us-east-1.amazonaws.com/prod';
+const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
 
 class ProblemPage {
-    constructor(problemNumber) {
-        this.problemNumber = problemNumber;
+    constructor(problemId) {
+        this.problemId = problemId;
         this.autoRefresh = true;
         this.init();
     }
@@ -50,7 +50,7 @@ class ProblemPage {
         const rule = await fetch('rule.md').then(r => r.text());
         const ruleWithUsername = rule
             .replace(/<USERNAME>/g, username)
-            .replace(/<PROBLEM_NUMBER>/g, this.problemNumber);
+            .replace(/<PROBLEM_ID>/g, this.problemId);
         
         try {
             await navigator.clipboard.writeText(ruleWithUsername);
@@ -70,7 +70,7 @@ class ProblemPage {
         const rule = await fetch('rule.md').then(r => r.text());
         const preview = rule
             .replace(/<USERNAME>/g, 'example-user')
-            .replace(/<PROBLEM_NUMBER>/g, this.problemNumber);
+            .replace(/<PROBLEM_ID>/g, this.problemId);
         document.getElementById('rulePreview').textContent = preview;
         this.modal.style.display = 'block';
     }
@@ -104,12 +104,11 @@ class ProblemPage {
             const tbody = document.getElementById('leaderboard');
             tbody.textContent = '';
             
-            const items = Array.isArray(data) ? data : [];
-            const problemData = items
-                .filter(item => item.problem_number === this.problemNumber)
-                .sort((a, b) => a.timestamp - b.timestamp);
+            const entries = (data.leaderboard || [])
+                .filter(item => item[this.problemId])
+                .sort((a, b) => (a[this.problemId] || '').localeCompare(b[this.problemId] || ''));
             
-            problemData.forEach((item, index) => {
+            entries.forEach((item, index) => {
                 const row = document.createElement('tr');
                 const rank = document.createElement('td');
                 rank.className = 'rank';
@@ -117,7 +116,7 @@ class ProblemPage {
                 const username = document.createElement('td');
                 username.textContent = item.username;
                 const timestamp = document.createElement('td');
-                timestamp.textContent = new Date(item.timestamp).toLocaleString('ja-JP', {timeZone: 'Asia/Tokyo'});
+                timestamp.textContent = item[this.problemId] || '-';
                 row.append(rank, username, timestamp);
                 tbody.appendChild(row);
             });

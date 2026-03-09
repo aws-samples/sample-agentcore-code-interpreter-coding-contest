@@ -1,0 +1,13 @@
+{
+  "title": "1,000,000→Free",
+  "order": 3,
+  "enabled": true,
+  "description": [
+    "引数として整数を受け取り、文字列で返すsolver関数を実装してください。例から法則性を見極めて実装してください。"
+  ],
+  "examples": [
+    {"input": "solver(1000000)", "output": "\"Free\""},
+    {"input": "solver(10000000)", "output": "\"Pro\""},
+    {"input": "solver(500000001)", "output": "\"担当SAにご相談ください\""}
+  ]
+}
