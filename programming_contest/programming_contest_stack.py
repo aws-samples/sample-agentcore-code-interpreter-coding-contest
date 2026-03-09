@@ -1,42 +1,19 @@
 import base64
-import subprocess
-import sys
 
 from aws_cdk import (
     CfnOutput,
-    CustomResource,
     Duration,
     Stack,
-)
-from aws_cdk import (
-    aws_apigateway as apigw,
-)
-from aws_cdk import (
-    aws_bedrockagentcore as agentcore,
-)
-from aws_cdk import (
-    aws_cloudfront as cloudfront,
-)
-from aws_cdk import (
-    aws_cloudfront_origins as origins,
-)
-from aws_cdk import (
-    aws_dynamodb as dynamodb,
-)
-from aws_cdk import (
-    aws_iam as iam,
-)
-from aws_cdk import (
-    aws_lambda as _lambda,
-)
-from aws_cdk import (
-    aws_s3 as s3,
-)
-from aws_cdk import (
-    aws_s3_deployment as s3deploy,
-)
-from aws_cdk import (
-    custom_resources as cr,
+    aws_apigateway,
+    aws_bedrockagentcore,
+    aws_cloudfront,
+    aws_cloudfront_origins,
+    aws_dynamodb,
+    aws_iam,
+    aws_lambda,
+    aws_s3,
+    aws_s3_deployment,
+    custom_resources,
 )
 from constructs import Construct
 
@@ -53,77 +30,63 @@ class ProgrammingContestStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Run build script to prepare deployment sources
-        subprocess.run([sys.executable, "scripts/build_contents.py"], check=True)
+        auth_string = base64.b64encode(f"{admin_username}:{admin_password}".encode()).decode()
 
         # DynamoDB tables
-        leaderboard_table = dynamodb.Table(
+        leaderboard_table = aws_dynamodb.Table(
             self,
             "LeaderboardTable",
-            partition_key=dynamodb.Attribute(name="submission_id", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            partition_key=aws_dynamodb.Attribute(name="submission_id", type=aws_dynamodb.AttributeType.STRING),
+            billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
         )
 
-        game_state_table = dynamodb.Table(
+        game_state_table = aws_dynamodb.Table(
             self,
             "GameStateTable",
-            partition_key=dynamodb.Attribute(name="state_key", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            partition_key=aws_dynamodb.Attribute(name="state_key", type=aws_dynamodb.AttributeType.STRING),
+            billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
         )
 
         # Initialize game state to false
-        init_lambda = _lambda.SingletonFunction(
+        custom_resources.AwsCustomResource(
             self,
             "InitGameState",
-            uuid="init-game-state",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="index.handler",
-            code=_lambda.Code.from_inline(
-                """
-import boto3
-import json
-
-def handler(event, context):
-    if event['RequestType'] == 'Create':
-        dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table(event['ResourceProperties']['TableName'])
-        table.put_item(Item={'state_key': 'game_active', 'value': False})
-    return {'PhysicalResourceId': 'game-state-init'}
-"""
+            on_create=custom_resources.AwsSdkCall(
+                service="DynamoDB",
+                action="putItem",
+                parameters={
+                    "TableName": game_state_table.table_name,
+                    "Item": {"state_key": {"S": "game_active"}, "value": {"BOOL": False}},
+                },
+                physical_resource_id=custom_resources.PhysicalResourceId.of("game-state-init"),
             ),
-            timeout=Duration.seconds(10),
-        )
-        game_state_table.grant_write_data(init_lambda)
-
-        CustomResource(
-            self,
-            "InitGameStateResource",
-            service_token=cr.Provider(self, "InitProvider", on_event_handler=init_lambda).service_token,
-            properties={"TableName": game_state_table.table_name},
+            policy=custom_resources.AwsCustomResourcePolicy.from_sdk_calls(
+                resources=[game_state_table.table_arn],
+            ),
         )
 
         # Code Interpreter
-        code_interpreter = agentcore.CfnCodeInterpreterCustom(
+        code_interpreter = aws_bedrockagentcore.CfnCodeInterpreterCustom(
             self,
             "CodeInterpreter",
             name="contest_interpreter",
-            network_configuration=agentcore.CfnCodeInterpreterCustom.CodeInterpreterNetworkConfigurationProperty(
+            network_configuration=aws_bedrockagentcore.CfnCodeInterpreterCustom.CodeInterpreterNetworkConfigurationProperty(
                 network_mode="SANDBOX"
             ),
         )
 
         # S3 Buckets
-        website_bucket = s3.Bucket(self, "WebsiteBucket", block_public_access=s3.BlockPublicAccess.BLOCK_ALL)
+        website_bucket = aws_s3.Bucket(self, "WebsiteBucket", block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL)
 
-        problems_bucket = s3.Bucket(self, "ProblemsBucket", block_public_access=s3.BlockPublicAccess.BLOCK_ALL)
+        problems_bucket = aws_s3.Bucket(self, "ProblemsBucket", block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL)
 
         # Lambda functions
-        submit_lambda = _lambda.Function(
+        submit_lambda = aws_lambda.Function(
             self,
             "SubmitFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
+            runtime=aws_lambda.Runtime.PYTHON_3_11,
             handler="submit.handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=aws_lambda.Code.from_asset("lambda"),
             timeout=Duration.seconds(30),
             environment={
                 "LEADERBOARD_TABLE": leaderboard_table.table_name,
@@ -134,7 +97,7 @@ def handler(event, context):
         )
 
         submit_lambda.add_to_role_policy(
-            iam.PolicyStatement(
+            aws_iam.PolicyStatement(
                 actions=[
                     "bedrock-agentcore:StartCodeInterpreterSession",
                     "bedrock-agentcore:InvokeCodeInterpreter",
@@ -144,96 +107,57 @@ def handler(event, context):
             )
         )
 
-        leaderboard_lambda = _lambda.Function(
+        api_lambda = aws_lambda.Function(
             self,
-            "LeaderboardFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="leaderboard.handler",
-            code=_lambda.Code.from_asset("lambda"),
+            "ApiFunction",
+            runtime=aws_lambda.Runtime.PYTHON_3_11,
+            handler="api.handler",
+            code=aws_lambda.Code.from_asset("lambda"),
             timeout=Duration.seconds(10),
             environment={
                 "LEADERBOARD_TABLE": leaderboard_table.table_name,
-                "PROBLEMS_BUCKET": problems_bucket.bucket_name,
-            },
-        )
-
-        reset_lambda = _lambda.Function(
-            self,
-            "ResetFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="reset.handler",
-            code=_lambda.Code.from_asset("lambda"),
-            timeout=Duration.seconds(30),
-            environment={"LEADERBOARD_TABLE": leaderboard_table.table_name},
-        )
-
-        game_state_lambda = _lambda.Function(
-            self,
-            "GameStateFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="game_state.handler",
-            code=_lambda.Code.from_asset("lambda"),
-            timeout=Duration.seconds(10),
-            environment={"GAME_STATE_TABLE": game_state_table.table_name},
-        )
-
-        problems_lambda = _lambda.Function(
-            self,
-            "ProblemsFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            handler="problems.handler",
-            code=_lambda.Code.from_asset("lambda"),
-            timeout=Duration.seconds(10),
-            environment={
                 "GAME_STATE_TABLE": game_state_table.table_name,
                 "PROBLEMS_BUCKET": problems_bucket.bucket_name,
+                "ADMIN_AUTH_TOKEN": f"Basic {auth_string}",
             },
         )
 
         # Permissions
         leaderboard_table.grant_read_write_data(submit_lambda)
-        leaderboard_table.grant_read_data(leaderboard_lambda)
-        leaderboard_table.grant_read_write_data(reset_lambda)
         game_state_table.grant_read_data(submit_lambda)
-        game_state_table.grant_read_write_data(game_state_lambda)
-        game_state_table.grant_read_data(problems_lambda)
         problems_bucket.grant_read(submit_lambda)
-        problems_bucket.grant_read(leaderboard_lambda)
-        problems_bucket.grant_read(problems_lambda)
+
+        leaderboard_table.grant_read_write_data(api_lambda)
+        game_state_table.grant_read_write_data(api_lambda)
+        problems_bucket.grant_read(api_lambda)
 
         # API Gateway
-        api = apigw.RestApi(
+        api = aws_apigateway.RestApi(
             self,
             "ProgrammingContestApi",
-            default_cors_preflight_options=apigw.CorsOptions(
-                allow_origins=apigw.Cors.ALL_ORIGINS,
-                allow_methods=apigw.Cors.ALL_METHODS,
+            default_cors_preflight_options=aws_apigateway.CorsOptions(
+                allow_origins=aws_apigateway.Cors.ALL_ORIGINS,
+                allow_methods=aws_apigateway.Cors.ALL_METHODS,
                 allow_headers=["Content-Type", "Authorization"],
             ),
         )
 
-        admin_auth_token = base64.b64encode(f"{admin_username}:{admin_password}".encode()).decode()
+        api_integration = aws_apigateway.LambdaIntegration(api_lambda)
 
-        api.root.add_resource("submit").add_method("POST", apigw.LambdaIntegration(submit_lambda))
-        api.root.add_resource("leaderboard").add_method("GET", apigw.LambdaIntegration(leaderboard_lambda))
-        api.root.add_resource("problems").add_method("GET", apigw.LambdaIntegration(problems_lambda))
+        api.root.add_resource("submit").add_method("POST", aws_apigateway.LambdaIntegration(submit_lambda))
+        api.root.add_resource("leaderboard").add_method("GET", api_integration)
+        api.root.add_resource("problems").add_method("GET", api_integration)
+        api.root.add_resource("reset").add_method("POST", api_integration)
 
         game_state_resource = api.root.add_resource("game-state")
-        game_state_resource.add_method("GET", apigw.LambdaIntegration(game_state_lambda))
-
-        # Admin endpoints - Lambda checks Authorization header
-        for fn in [reset_lambda, game_state_lambda]:
-            fn.add_environment("ADMIN_AUTH_TOKEN", f"Basic {admin_auth_token}")
-
-        api.root.add_resource("reset").add_method("POST", apigw.LambdaIntegration(reset_lambda))
-        game_state_resource.add_method("POST", apigw.LambdaIntegration(game_state_lambda))
+        game_state_resource.add_method("GET", api_integration)
+        game_state_resource.add_method("POST", api_integration)
 
         # CloudFront Functions for Basic Auth
-        auth_string = base64.b64encode(f"{admin_username}:{admin_password}".encode()).decode()
-        basic_auth_function = cloudfront.Function(
+        basic_auth_function = aws_cloudfront.Function(
             self,
             "BasicAuthFunction",
-            code=cloudfront.FunctionCode.from_inline(f"""\
+            code=aws_cloudfront.FunctionCode.from_inline(f"""\
 function handler(event) {{
   var request = event.request;
   var uri = request.uri;
@@ -250,16 +174,16 @@ function handler(event) {{
         )
 
         # CloudFront
-        distribution = cloudfront.Distribution(
+        distribution = aws_cloudfront.Distribution(
             self,
             "WebsiteDistribution",
-            default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(website_bucket),
-                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            default_behavior=aws_cloudfront.BehaviorOptions(
+                origin=aws_cloudfront_origins.S3Origin(website_bucket),
+                viewer_protocol_policy=aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 function_associations=[
-                    cloudfront.FunctionAssociation(
+                    aws_cloudfront.FunctionAssociation(
                         function=basic_auth_function,
-                        event_type=cloudfront.FunctionEventType.VIEWER_REQUEST,
+                        event_type=aws_cloudfront.FunctionEventType.VIEWER_REQUEST,
                     )
                 ],
             ),
@@ -269,13 +193,13 @@ function handler(event) {{
         # Deploy website + assets to Web Bucket
         config_js = f"window.API_CONFIG = {{ url: '{api.url}' }};"
 
-        s3deploy.BucketDeployment(
+        aws_s3_deployment.BucketDeployment(
             self,
             "DeployWebsite",
             sources=[
-                s3deploy.Source.asset("website"),
-                s3deploy.Source.asset("build/assets"),
-                s3deploy.Source.data("config.js", config_js),
+                aws_s3_deployment.Source.asset("website"),
+                aws_s3_deployment.Source.asset("build/assets"),
+                aws_s3_deployment.Source.data("config.js", config_js),
             ],
             destination_bucket=website_bucket,
             distribution=distribution,
@@ -283,10 +207,10 @@ function handler(event) {{
         )
 
         # Deploy test_solver.py + metadata.json to Problems Bucket
-        s3deploy.BucketDeployment(
+        aws_s3_deployment.BucketDeployment(
             self,
             "DeployProblems",
-            sources=[s3deploy.Source.asset("build/problems")],
+            sources=[aws_s3_deployment.Source.asset("build/problems")],
             destination_bucket=problems_bucket,
         )
 

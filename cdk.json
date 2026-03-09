@@ -1,5 +1,6 @@
 {
   "app": "uv run python app.py",
+  "build": "uv run python scripts/build_contents.py",
   "watch": {
     "include": [
       "**"
