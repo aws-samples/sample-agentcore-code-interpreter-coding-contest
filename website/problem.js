@@ -87,10 +87,10 @@ class ProblemPage {
             const data = await response.json();
             if (data.is_active) {
                 this.gameStatus.textContent = '🟢 ゲーム進行中';
-                this.gameStatus.style.color = '#007600';
+                this.gameStatus.style.color = 'var(--color-success)';
             } else {
                 this.gameStatus.textContent = '🔴 ゲーム停止中';
-                this.gameStatus.style.color = '#d13212';
+                this.gameStatus.style.color = 'var(--color-error)';
             }
         } catch (error) {
             console.error('Failed to load game state:', error);

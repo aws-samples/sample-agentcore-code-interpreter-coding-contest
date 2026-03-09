@@ -25,7 +25,7 @@
 
                 if (!data.game_active) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
+                    div.style.cssText = 'text-align: center; padding: 40px; color: var(--color-text-tertiary);';
                     div.textContent = 'ゲームは現在停止中です。開始後に問題が表示されます。';
                     container.appendChild(div);
                     return;
@@ -34,7 +34,7 @@
                 const problems = data.problems || [];
                 if (problems.length === 0) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
+                    div.style.cssText = 'text-align: center; padding: 40px; color: var(--color-text-tertiary);';
                     div.textContent = '問題がありません。';
                     container.appendChild(div);
                     return;

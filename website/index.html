@@ -72,9 +72,9 @@ paths:
             <div class="leaderboard">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h2>リーダーボード</h2>
-                    <div>
+                    <div style="font-size: 0.85em;">
                         <span>ゲーム状態: </span>
-                        <span id="gameStatus" style="padding: 4px 8px; border-radius: 4px; font-weight: bold;">読み込み中...</span>
+                        <span id="gameStatus" class="status-badge">読み込み中...</span>
                     </div>
                 </div>
                 <div id="leaderboard-content">読み込み中...</div>
@@ -102,17 +102,15 @@ paths:
                 const el = document.getElementById('gameStatus');
                 if (data.is_active) {
                     el.textContent = '進行中';
-                    el.style.backgroundColor = '#28a745';
+                    el.className = 'status-badge status-active';
                 } else {
                     el.textContent = '終了';
-                    el.style.backgroundColor = '#dc3545';
+                    el.className = 'status-badge status-inactive';
                 }
-                el.style.color = 'white';
             } catch (error) {
                 const el = document.getElementById('gameStatus');
                 el.textContent = '取得失敗';
-                el.style.backgroundColor = '#6c757d';
-                el.style.color = 'white';
+                el.className = 'status-badge';
             }
         }
 
@@ -128,7 +126,7 @@ paths:
 
                 if (entries.length === 0) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'text-align: center; padding: 40px; color: #666;';
+                    div.style.cssText = 'text-align: center; padding: 40px; color: var(--color-text-tertiary);';
                     div.textContent = 'まだ提出がありません。最初の挑戦者になりましょう！';
                     container.appendChild(div);
                     return;
