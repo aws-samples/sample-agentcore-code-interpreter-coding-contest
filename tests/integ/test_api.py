@@ -55,6 +55,23 @@ class TestProblems:
         assert data["game_active"] is True
 
 
+class TestProblemSetSwitching:
+    def test_switching_problem_set_filters_problems(self, base_url, admin_headers):
+        # Switch to "practice" -> only prime-check
+        httpx.post(f"{base_url}/api/game-state", headers=admin_headers, json={"is_active": True, "problem_set": "practice"})
+        r = httpx.get(f"{base_url}/api/problems")
+        pids = [p["problem_id"] for p in r.json()["problems"]]
+        assert "prime-check" in pids
+        assert "bracket-depth" not in pids
+
+        # Switch to "contest" -> bracket-depth, country-quiz, range-lookup but not prime-check
+        httpx.post(f"{base_url}/api/game-state", headers=admin_headers, json={"is_active": True, "problem_set": "contest"})
+        r = httpx.get(f"{base_url}/api/problems")
+        pids = [p["problem_id"] for p in r.json()["problems"]]
+        assert "bracket-depth" in pids
+        assert "prime-check" not in pids
+
+
 class TestLeaderboard:
     def test_get_leaderboard(self, base_url):
         r = httpx.get(f"{base_url}/api/leaderboard")
