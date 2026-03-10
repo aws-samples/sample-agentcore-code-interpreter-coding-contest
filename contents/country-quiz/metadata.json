@@ -2,6 +2,7 @@
   "title": "これはどこの国？",
   "order": 2,
   "enabled": true,
+  "problem_set": ["contest", "kiro7"],
   "description": [
     "引数なしのsolver関数を実装し、以下の写真の国名を日本語で返してください。",
     "<img src=\"country-quiz/assets/country.jpg\" alt=\"国の画像\" style=\"max-width: 100%; height: auto; margin: 10px 0;\">"

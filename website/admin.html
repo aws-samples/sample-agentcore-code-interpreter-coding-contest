@@ -20,6 +20,10 @@
                     <span>現在の状態:</span>
                     <span id="statusBadge" class="status-badge">読み込み中...</span>
                 </div>
+                <div style="margin: 16px 0;">
+                    <label for="problemSetSelect" style="display: block; margin-bottom: 4px; font-size: 0.9em; color: var(--color-text-secondary);">問題セット:</label>
+                    <select id="problemSetSelect" style="padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-secondary); color: var(--color-text-primary); width: 260px;"></select>
+                </div>
                 <div class="control-buttons">
                     <button class="btn btn-success" id="startBtn">ゲーム開始</button>
                     <button class="btn btn-danger" id="stopBtn">ゲーム終了</button>
@@ -51,12 +55,20 @@
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const resetAllBtn = document.getElementById('resetAllBtn');
+        const problemSetSelect = document.getElementById('problemSetSelect');
 
         async function loadGameState() {
             try {
                 const response = await fetch(`${API_URL}/game-state`);
                 const data = await response.json();
                 updateUI(data.is_active);
+                const sets = data.problem_sets || [];
+                const current = data.problem_set || '';
+                if (!problemSetSelect.matches(':focus')) {
+                    problemSetSelect.innerHTML = sets.map(s =>
+                        `<option value="${s}"${s === current ? ' selected' : ''}>${s}</option>`
+                    ).join('');
+                }
             } catch (error) {
                 console.error('Failed to load game state:', error);
                 statusBadge.textContent = 'エラー';
@@ -80,10 +92,11 @@
 
         async function setGameState(isActive) {
             try {
+                const body = { is_active: isActive, problem_set: problemSetSelect.value };
                 const response = await fetch(`${API_URL}/game-state`, {
                     method: 'POST',
                     headers: ADMIN_HEADERS,
-                    body: JSON.stringify({ is_active: isActive })
+                    body: JSON.stringify(body)
                 });
                 const data = await response.json();
                 updateUI(data.is_active);

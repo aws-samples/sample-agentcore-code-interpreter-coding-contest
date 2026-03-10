@@ -1,0 +1,14 @@
+{
+  "title": "素数判定",
+  "order": 1,
+  "enabled": true,
+  "problem_set": ["practice"],
+  "description": [
+    "引数として正の整数nを受け取り、素数であればTrue、そうでなければFalseを返すsolver関数を実装してください。"
+  ],
+  "examples": [
+    { "input": "solver(2)", "output": "True" },
+    { "input": "solver(4)", "output": "False" },
+    { "input": "solver(17)", "output": "True" }
+  ]
+}

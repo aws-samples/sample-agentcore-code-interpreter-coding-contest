@@ -2,13 +2,14 @@
   "title": "括弧ネスト深度",
   "order": 1,
   "enabled": true,
+  "problem_set": ["contest", "kiro7"],
   "description": [
     "引数として括弧文字列sを受け取り、正しい括弧のネストの最大深度を整数で返すsolver関数を実装してください。",
     "括弧が不正な場合は-1を返してください。",
     "<strong>対応括弧:</strong> ()、{}、[]"
   ],
   "examples": [
-    {"input": "solver(\"({[]})\")", "output": "3"},
-    {"input": "solver(\"([)]\")", "output": "-1"}
+    { "input": "solver(\"({[]})\")", "output": "3" },
+    { "input": "solver(\"([)]\")", "output": "-1" }
   ]
 }

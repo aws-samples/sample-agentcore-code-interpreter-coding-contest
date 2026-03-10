@@ -101,14 +101,22 @@ def _reset_leaderboard():
 def _get_game_state():
     response = game_state_table.get_item(Key={"state_key": "game_active"})
     is_active = response.get("Item", {}).get("value", False)
-    return _response(200, {"is_active": is_active})
+    ps_response = game_state_table.get_item(Key={"state_key": "active_problem_set"})
+    problem_set = ps_response.get("Item", {}).get("value", "")
+    problem_sets = _get_all_problem_sets()
+    return _response(200, {"is_active": is_active, "problem_set": problem_set, "problem_sets": problem_sets})
 
 
 def _set_game_state(event):
     body = json.loads(event["body"])
     is_active = body.get("is_active", True)
+    problem_set = body.get("problem_set")
     game_state_table.put_item(Item={"state_key": "game_active", "value": is_active})
-    return _response(200, {"message": "Game state updated", "is_active": is_active})
+    if problem_set is not None:
+        game_state_table.put_item(Item={"state_key": "active_problem_set", "value": problem_set})
+    ps_response = game_state_table.get_item(Key={"state_key": "active_problem_set"})
+    current_ps = ps_response.get("Item", {}).get("value", "")
+    return _response(200, {"message": "Game state updated", "is_active": is_active, "problem_set": current_ps})
 
 
 # --- Problems ---
@@ -131,7 +139,31 @@ def _get_enabled_problem_ids():
     return [pid for pid, _ in _get_enabled_problems()]
 
 
+def _get_active_problem_set():
+    response = game_state_table.get_item(Key={"state_key": "active_problem_set"})
+    return response.get("Item", {}).get("value", "")
+
+
+def _get_all_problem_sets():
+    """Return sorted unique problem_set values from all enabled problems."""
+    paginator = s3.get_paginator("list_objects_v2")
+    sets = set()
+    for page in paginator.paginate(Bucket=problems_bucket, Delimiter="/"):
+        for prefix in page.get("CommonPrefixes", []):
+            pid = prefix["Prefix"].rstrip("/")
+            try:
+                obj = s3.get_object(Bucket=problems_bucket, Key=f"{pid}/metadata.json")
+                metadata = json.loads(obj["Body"].read())
+                if metadata.get("enabled", False):
+                    for ps in metadata.get("problem_set", []):
+                        sets.add(ps)
+            except Exception:
+                continue
+    return sorted(sets)
+
+
 def _get_enabled_problems():
+    active_ps = _get_active_problem_set()
     paginator = s3.get_paginator("list_objects_v2")
     problems = []
     for page in paginator.paginate(Bucket=problems_bucket, Delimiter="/"):
@@ -140,8 +172,11 @@ def _get_enabled_problems():
             try:
                 obj = s3.get_object(Bucket=problems_bucket, Key=f"{pid}/metadata.json")
                 metadata = json.loads(obj["Body"].read())
-                if metadata.get("enabled", False):
-                    problems.append((pid, metadata))
+                if not metadata.get("enabled", False):
+                    continue
+                if active_ps not in metadata.get("problem_set", []):
+                    continue
+                problems.append((pid, metadata))
             except Exception:
                 continue
     problems.sort(key=lambda x: x[1].get("order", 999))

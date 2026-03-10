@@ -39,6 +39,7 @@ wheels/
 *.swo
 *~
 .DS_Store
+.kiro/settings/
 
 # Environment
 .env
