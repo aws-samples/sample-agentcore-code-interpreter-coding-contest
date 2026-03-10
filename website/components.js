@@ -16,8 +16,8 @@ class AppNav extends HTMLElement {
         const current = this.getAttribute('current') || '';
         this.innerHTML = `
             <div class="nav">
-                <a href="index.html" class="${current === 'home' ? 'active' : ''}">ホーム</a>
-                <a href="problems.html" class="${current === 'problems' ? 'active' : ''}">問題一覧</a>
+                <a href="index.html" class="${current === 'home' ? 'active' : ''}">リーダーボード</a>
+                <a href="problems.html" class="${current === 'problems' ? 'active' : ''}">問題</a>
                 <a href="admin.html" class="${current === 'admin' ? 'active' : ''}">管理</a>
             </div>
         `;

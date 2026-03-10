@@ -16,6 +16,7 @@ dev = [
     "commonmark",
     "ruff",
     "pytest",
+    "schemathesis",
 ]
 
 [tool.ruff]

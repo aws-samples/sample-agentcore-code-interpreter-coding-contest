@@ -31,6 +31,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.hypothesis/
 
 # IDEs
 .vscode/
@@ -45,3 +46,4 @@ wheels/
 .env
 .env.local
 .serena
+

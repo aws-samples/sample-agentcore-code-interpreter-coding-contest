@@ -1,0 +1,71 @@
+openapi: 3.0.0
+info:
+  title: Coding Contest API
+  version: 1.0.0
+paths:
+  /submit:
+    post:
+      summary: Submit code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - problem_id
+                - code
+              properties:
+                username:
+                  type: string
+                problem_id:
+                  type: string
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Submission result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - result
+                  - message
+                properties:
+                  result:
+                    type: string
+                    enum: [correct, incorrect, error]
+                  message:
+                    type: string
+                  submission_id:
+                    type: string
+                    description: Returned only on first correct submission
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
