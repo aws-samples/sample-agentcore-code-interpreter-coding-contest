@@ -101,7 +101,7 @@
 
         async function loadGameState() {
             try {
-                const response = await fetch(`${API_URL}/game-state`);
+                const response = await adminFetch(`${API_URL}/game-state`);
                 const data = await response.json();
                 updateUI(data.is_active);
                 const sets = data.problem_sets || [];

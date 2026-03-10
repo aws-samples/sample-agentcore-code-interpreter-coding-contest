@@ -30,7 +30,10 @@ def handler(event, context):
         elif resource == "/api/problems" and method == "GET":
             return _get_problems()
         elif resource == "/api/game-state" and method == "GET":
-            return _get_game_state()
+            auth_error = require_admin_auth(event)
+            if auth_error:
+                return _get_game_state()
+            return _get_game_state_admin()
         elif resource == "/api/game-state" and method == "POST":
             return _require_auth_then(event, lambda: _set_game_state(event))
         elif resource == "/api/reset" and method == "POST":
@@ -93,6 +96,12 @@ def _reset_leaderboard():
 # --- Game State ---
 
 def _get_game_state():
+    response = game_state_table.get_item(Key={"state_key": "game_active"})
+    is_active = response.get("Item", {}).get("value", False)
+    return _response(200, {"is_active": is_active})
+
+
+def _get_game_state_admin():
     response = game_state_table.get_item(Key={"state_key": "game_active"})
     is_active = response.get("Item", {}).get("value", False)
     ps_response = game_state_table.get_item(Key={"state_key": "active_problem_set"})

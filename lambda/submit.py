@@ -121,6 +121,14 @@ def handler(event, context):
                 "body": json.dumps({"error": f"Problem '{problem_id}' does not exist or is disabled."}),
             }
 
+        active_ps = game_state_table.get_item(Key={"state_key": "active_problem_set"}).get("Item", {}).get("value", "")
+        if active_ps and active_ps not in metadata.get("problem_set", []):
+            return {
+                "statusCode": 400,
+                "headers": HEADERS,
+                "body": json.dumps({"error": f"Problem '{problem_id}' is not in the active problem set."}),
+            }
+
         test_code = _get_test_code(problem_id)
         result_str, error = _run_tests(code, test_code)
 
