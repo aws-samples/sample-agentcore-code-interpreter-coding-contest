@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+
 import aws_cdk as cdk
 from aws_pdk.pdk_nag import AwsPrototypingChecks
 from cdk_nag import NagSuppressions
@@ -13,6 +15,10 @@ admin_password = app.node.try_get_context("adminPassword") or "password"
 stack = ProgrammingContestStack(
     app,
     "ProgrammingContestStack",
+    env=cdk.Environment(
+        account=os.environ["CDK_DEFAULT_ACCOUNT"],
+        region=os.environ["CDK_DEFAULT_REGION"],
+    ),
     admin_username=admin_username,
     admin_password=admin_password,
 )

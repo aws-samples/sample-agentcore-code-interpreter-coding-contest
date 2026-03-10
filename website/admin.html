@@ -161,7 +161,9 @@
         resetAllBtn.addEventListener('click', resetAll);
 
         loadGameState();
-        setInterval(loadGameState, 5000);
+        setInterval(() => {
+            if (document.visibilityState === 'visible') loadGameState();
+        }, 5000);
     </script>
 </body>
 </html>

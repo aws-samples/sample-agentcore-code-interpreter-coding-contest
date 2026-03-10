@@ -21,7 +21,7 @@ class ProblemPage {
         this.loadGameState();
         this.loadLeaderboard();
         setInterval(() => {
-            if (this.autoRefresh) {
+            if (this.autoRefresh && document.visibilityState === 'visible') {
                 this.loadGameState();
                 this.loadLeaderboard();
             }
@@ -56,13 +56,7 @@ class ProblemPage {
             await navigator.clipboard.writeText(ruleWithUsername);
             alert('✅ ルールをクリップボードにコピーしました！\nLLMに貼り付けてコードを生成してください。');
         } catch (err) {
-            const textarea = document.createElement('textarea');
-            textarea.value = ruleWithUsername;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            alert('✅ ルールをクリップボードにコピーしました！\nLLMに貼り付けてコードを生成してください。');
+            alert('クリップボードへのコピーに失敗しました。\n手動でコピーしてください。');
         }
     }
 

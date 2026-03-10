@@ -285,6 +285,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "commonmark" },
+    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "schemathesis" },
@@ -302,6 +303,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "commonmark" },
+    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "schemathesis" },

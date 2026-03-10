@@ -14,6 +14,9 @@ code_interpreter_id = "aws.codeinterpreter.v1"
 problems_bucket = os.environ["PROBLEMS_BUCKET"]
 
 HEADERS = {"Content-Type": "application/json"}
+MAX_CODE_SIZE = 10_000
+MAX_USERNAME_LENGTH = 50
+MAX_PROBLEM_ID_LENGTH = 50
 
 RUNNER_CODE = """
 import unittest
@@ -99,9 +102,16 @@ def handler(event, context):
             return {"statusCode": 403, "headers": HEADERS, "body": json.dumps({"error": "Game is not active."})}
 
         body = json.loads(event["body"])
-        username = body["username"]
-        problem_id = body["problem_id"]
-        code = body["code"]
+        username = body.get("username", "").strip()
+        problem_id = body.get("problem_id", "").strip()
+        code = body.get("code", "")
+
+        if not username or len(username) > MAX_USERNAME_LENGTH:
+            return {"statusCode": 400, "headers": HEADERS, "body": json.dumps({"error": "Invalid username."})}
+        if not problem_id or len(problem_id) > MAX_PROBLEM_ID_LENGTH:
+            return {"statusCode": 400, "headers": HEADERS, "body": json.dumps({"error": "Invalid problem_id."})}
+        if not code or len(code) > MAX_CODE_SIZE:
+            return {"statusCode": 400, "headers": HEADERS, "body": json.dumps({"error": "Invalid code."})}
 
         metadata = _get_metadata(problem_id)
         if not metadata or not metadata.get("enabled", False):
@@ -111,7 +121,6 @@ def handler(event, context):
                 "body": json.dumps({"error": f"Problem '{problem_id}' does not exist or is disabled."}),
             }
 
-        code = code.replace("\\n", "\n").replace("\\t", "\t")
         test_code = _get_test_code(problem_id)
         result_str, error = _run_tests(code, test_code)
 
@@ -135,29 +144,26 @@ def handler(event, context):
         is_correct = passed == total
 
         if is_correct:
-            existing = table.scan(
-                FilterExpression="username = :u AND problem_id = :p",
-                ExpressionAttributeValues={":u": username, ":p": problem_id},
-            )
-            if existing["Items"]:
+            jst = timezone(timedelta(hours=9))
+            timestamp = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S JST")
+            submission_id = str(uuid.uuid4())
+
+            try:
+                table.put_item(
+                    Item={
+                        "problem_id": problem_id,
+                        "username": username,
+                        "timestamp": timestamp,
+                        "submission_id": submission_id,
+                    },
+                    ConditionExpression="attribute_not_exists(problem_id) AND attribute_not_exists(username)",
+                )
+            except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
                 return {
                     "statusCode": 200,
                     "headers": HEADERS,
                     "body": json.dumps({"result": "correct", "message": f"Already solved. {passed}/{total} passed."}),
                 }
-
-            jst = timezone(timedelta(hours=9))
-            timestamp = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S JST")
-            submission_id = str(uuid.uuid4())
-
-            table.put_item(
-                Item={
-                    "submission_id": submission_id,
-                    "username": username,
-                    "problem_id": problem_id,
-                    "timestamp": timestamp,
-                }
-            )
 
             return {
                 "statusCode": 200,

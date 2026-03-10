@@ -102,8 +102,10 @@
         loadGameStatus();
         loadLeaderboard();
         setInterval(() => {
-            loadGameStatus();
-            loadLeaderboard();
+            if (document.visibilityState === 'visible') {
+                loadGameStatus();
+                loadLeaderboard();
+            }
         }, 5000);
     </script>
 </body>

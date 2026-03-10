@@ -1,12 +1,11 @@
 import json
 import os
 import traceback
-from collections import defaultdict
-from decimal import Decimal
 
 import boto3
 
 from admin_auth import require_admin_auth
+from logic import build_leaderboard, decimal_default
 
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
@@ -16,6 +15,9 @@ game_state_table = dynamodb.Table(os.environ["GAME_STATE_TABLE"])
 problems_bucket = os.environ["PROBLEMS_BUCKET"]
 
 HEADERS = {"Content-Type": "application/json"}
+
+# Module-level cache for enabled problems (reused across warm Lambda invocations)
+_problems_cache = {"data": None, "problem_set": None}
 
 
 def handler(event, context):
@@ -49,50 +51,42 @@ def _require_auth_then(event, fn):
 
 
 def _response(status, body):
-    return {"statusCode": status, "headers": HEADERS, "body": json.dumps(body, default=_decimal_default, ensure_ascii=False)}
-
-
-def _decimal_default(obj):
-    if isinstance(obj, Decimal):
-        return int(obj)
-    raise TypeError
+    return {"statusCode": status, "headers": HEADERS, "body": json.dumps(body, default=decimal_default, ensure_ascii=False)}
 
 
 # --- Leaderboard ---
 
+def _scan_all(table_resource):
+    """Scan all items with pagination."""
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table_resource.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        if "LastEvaluatedKey" not in response:
+            break
+        scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+    return items
+
+
 def _get_leaderboard():
     problem_ids = _get_enabled_problem_ids()
-    items = leaderboard_table.scan().get("Items", [])
-
-    user_data = defaultdict(dict)
-    for item in items:
-        user_data[item["username"]][item["problem_id"]] = item.get("timestamp", "")
-
-    result = []
-    for username, solved in user_data.items():
-        entry = {"username": username}
-        valid_times = []
-        for pid in problem_ids:
-            ts = solved.get(pid)
-            if ts:
-                parts = ts.split(" ")
-                entry[pid] = parts[1] if len(parts) >= 2 else ts
-                valid_times.append(ts)
-            else:
-                entry[pid] = None
-        entry["solved_count"] = len(valid_times)
-        entry["latest_time"] = max(valid_times) if valid_times else None
-        result.append(entry)
-
-    result.sort(key=lambda x: (-x["solved_count"], x["latest_time"] or "z"))
+    items = _scan_all(leaderboard_table)
+    result = build_leaderboard(items, problem_ids)
     return _response(200, {"leaderboard": result, "problem_ids": problem_ids})
 
 
 def _reset_leaderboard():
-    response = leaderboard_table.scan()
-    with leaderboard_table.batch_writer() as batch:
-        for item in response["Items"]:
-            batch.delete_item(Key={"submission_id": item["submission_id"]})
+    _problems_cache["data"] = None  # Invalidate cache
+    scan_kwargs = {}
+    while True:
+        response = leaderboard_table.scan(**scan_kwargs)
+        with leaderboard_table.batch_writer() as batch:
+            for item in response["Items"]:
+                batch.delete_item(Key={"problem_id": item["problem_id"], "username": item["username"]})
+        if "LastEvaluatedKey" not in response:
+            break
+        scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
     return _response(200, {"message": "Leaderboard reset successfully"})
 
 
@@ -114,6 +108,7 @@ def _set_game_state(event):
     game_state_table.put_item(Item={"state_key": "game_active", "value": is_active})
     if problem_set is not None:
         game_state_table.put_item(Item={"state_key": "active_problem_set", "value": problem_set})
+    _problems_cache["data"] = None  # Invalidate cache on state change
     ps_response = game_state_table.get_item(Key={"state_key": "active_problem_set"})
     current_ps = ps_response.get("Item", {}).get("value", "")
     return _response(200, {"message": "Game state updated", "is_active": is_active, "problem_set": current_ps})
@@ -163,7 +158,11 @@ def _get_all_problem_sets():
 
 
 def _get_enabled_problems():
+    """Return enabled problems for the active problem set, with module-level caching."""
     active_ps = _get_active_problem_set()
+    if _problems_cache["data"] is not None and _problems_cache["problem_set"] == active_ps:
+        return _problems_cache["data"]
+
     paginator = s3.get_paginator("list_objects_v2")
     problems = []
     for page in paginator.paginate(Bucket=problems_bucket, Delimiter="/"):
@@ -180,4 +179,6 @@ def _get_enabled_problems():
             except Exception:
                 continue
     problems.sort(key=lambda x: x[1].get("order", 999))
+    _problems_cache["data"] = problems
+    _problems_cache["problem_set"] = active_ps
     return problems

@@ -30,7 +30,7 @@
 uv sync
 
 # CDK Bootstrap（初回のみ、リージョンごとに1回）
-uv run cdk bootstrap
+npx -y cdk bootstrap
 ```
 
 ### 2. 認証情報の準備
@@ -40,7 +40,7 @@ uv run cdk bootstrap
 
 ### 3. デプロイ実行
 ```bash
-uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 **重要**: パスワードに特殊文字が含まれる場合はシングルクォートで囲む
@@ -138,7 +138,7 @@ uv run python -m pytest contents/<problem-name>/test_solver.py -v --rootdir=cont
 
 6. デプロイ:
 ```bash
-uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 ### 問題タイプ
@@ -338,7 +338,7 @@ CloudWatch Logsで異常検知：
 aws apigateway update-stage --rest-api-id <API_ID> --stage-name prod --patch-operations op=replace,path=/throttle/rateLimit,value=0
 
 # 2. 環境削除
-uv run cdk destroy
+npx -y cdk destroy
 ```
 
 ---
@@ -369,7 +369,7 @@ uv run cdk destroy
 3. スクリーンショット保存
 4. 環境削除（コスト削減）:
 ```bash
-uv run cdk destroy
+npx -y cdk destroy
 ```
 
 ---
@@ -381,13 +381,13 @@ uv run cdk destroy
 **エラー: "Admin username is required", "Admin password must be at least 8 characters"**
 ```bash
 # 解決: 認証情報を適切に指定
-uv run cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
 ```
 
 **エラー: "CDK bootstrap required"**
 ```bash
 # 解決: Bootstrap実行
-uv run cdk bootstrap
+npx -y cdk bootstrap
 ```
 
 ### 実行時エラー

@@ -3,6 +3,7 @@ import base64
 from aws_cdk import (
     CfnOutput,
     Duration,
+    RemovalPolicy,
     Stack,
     aws_apigateway,
     aws_cloudfront,
@@ -35,8 +36,10 @@ class ProgrammingContestStack(Stack):
         leaderboard_table = aws_dynamodb.Table(
             self,
             "LeaderboardTable",
-            partition_key=aws_dynamodb.Attribute(name="submission_id", type=aws_dynamodb.AttributeType.STRING),
+            partition_key=aws_dynamodb.Attribute(name="problem_id", type=aws_dynamodb.AttributeType.STRING),
+            sort_key=aws_dynamodb.Attribute(name="username", type=aws_dynamodb.AttributeType.STRING),
             billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         game_state_table = aws_dynamodb.Table(
@@ -44,6 +47,7 @@ class ProgrammingContestStack(Stack):
             "GameStateTable",
             partition_key=aws_dynamodb.Attribute(name="state_key", type=aws_dynamodb.AttributeType.STRING),
             billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Initialize game state to false
@@ -65,9 +69,19 @@ class ProgrammingContestStack(Stack):
         )
 
         # S3 Buckets
-        website_bucket = aws_s3.Bucket(self, "WebsiteBucket", block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL)
+        website_bucket = aws_s3.Bucket(
+            self, "WebsiteBucket",
+            block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+        )
 
-        problems_bucket = aws_s3.Bucket(self, "ProblemsBucket", block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL)
+        problems_bucket = aws_s3.Bucket(
+            self, "ProblemsBucket",
+            block_public_access=aws_s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+        )
 
         # Lambda functions
         submit_lambda = aws_lambda.Function(
@@ -185,3 +199,5 @@ class ProgrammingContestStack(Stack):
         # Outputs
         CfnOutput(self, "ApiUrl", value=api.url)
         CfnOutput(self, "WebsiteUrl", value=f"https://{distribution.distribution_domain_name}")
+        CfnOutput(self, "AdminAuthToken", value=f"Basic {auth_string}")
+        CfnOutput(self, "AdminCredentials", value=f"{admin_username}:{admin_password}")
