@@ -179,6 +179,8 @@ th {
     font-size: 12px;
 }
 tr:hover { background: var(--color-bg-shaded); }
+tr.all-clear { background: oklch(0.96 0.05 149); }
+tr.all-clear:hover { background: oklch(0.93 0.06 149); }
 .rank { font-weight: 700; color: var(--color-primary); }
 .status-ac { color: var(--color-success); font-weight: 700; }
 .status-wa { color: var(--color-error); font-weight: 700; }

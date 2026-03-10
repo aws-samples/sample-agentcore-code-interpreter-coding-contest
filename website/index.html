@@ -78,8 +78,10 @@
 
                 entries.forEach((entry, index) => {
                     const row = document.createElement('tr');
+                    const allClear = entry.solved_count === problemIds.length;
+                    if (allClear) row.className = 'all-clear';
                     const rankTd = document.createElement('td');
-                    rankTd.textContent = index + 1;
+                    rankTd.textContent = (allClear ? '🎉 ' : '') + (index + 1);
                     row.appendChild(rankTd);
                     const nameTd = document.createElement('td');
                     nameTd.textContent = entry.username;
