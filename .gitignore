@@ -47,3 +47,4 @@ wheels/
 .env.local
 .serena
 .playwright-cli/
+.env.credentials

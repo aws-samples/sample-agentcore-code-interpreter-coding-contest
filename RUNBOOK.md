@@ -40,7 +40,8 @@ npx -y cdk bootstrap
 
 ### 3. デプロイ実行
 ```bash
-npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+source .env.credentials
+npx -y cdk deploy
 ```
 
 **重要**: パスワードに特殊文字が含まれる場合はシングルクォートで囲む
@@ -138,7 +139,8 @@ uv run python -m pytest contents/<problem-name>/test_solver.py -v --rootdir=cont
 
 6. デプロイ:
 ```bash
-npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+source .env.credentials
+npx -y cdk deploy
 ```
 
 ### 問題タイプ
@@ -381,7 +383,8 @@ npx -y cdk destroy
 **エラー: "Admin username is required", "Admin password must be at least 8 characters"**
 ```bash
 # 解決: 認証情報を適切に指定
-npx -y cdk deploy --parameters AdminUsername=<ユーザー名> --parameters AdminPassword=<セキュアなパスワード>
+source .env.credentials
+npx -y cdk deploy
 ```
 
 **エラー: "CDK bootstrap required"**

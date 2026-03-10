@@ -9,8 +9,8 @@ from programming_contest.programming_contest_stack import ProgrammingContestStac
 
 app = cdk.App()
 
-admin_username = app.node.try_get_context("adminUsername") or "admin"
-admin_password = app.node.try_get_context("adminPassword") or "password"
+admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+admin_password = os.environ.get("ADMIN_PASSWORD", "password")
 
 stack = ProgrammingContestStack(
     app,

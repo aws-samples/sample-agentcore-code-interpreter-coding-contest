@@ -63,6 +63,17 @@
 
         const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(auth) };
 
+        async function adminFetch(url, options = {}) {
+            const res = await fetch(url, { ...options, headers: { ...ADMIN_HEADERS, ...options.headers } });
+            if (res.status === 401 || res.status === 403) {
+                sessionStorage.removeItem('adminAuth');
+                showAlert('❌ 認証に失敗しました。ページを再読み込みします。');
+                dlg.addEventListener('close', () => location.reload(), { once: true });
+                throw new Error('Auth failed');
+            }
+            return res;
+        }
+
         const dlg = document.getElementById('dlg');
         const dlgMsg = document.getElementById('dlg-msg');
         const dlgCancel = document.getElementById('dlg-cancel');
@@ -124,33 +135,29 @@
         async function setGameState(isActive) {
             try {
                 const body = { is_active: isActive, problem_set: problemSetSelect.value };
-                const response = await fetch(`${API_URL}/game-state`, {
+                const response = await adminFetch(`${API_URL}/game-state`, {
                     method: 'POST',
-                    headers: ADMIN_HEADERS,
                     body: JSON.stringify(body)
                 });
                 const data = await response.json();
                 updateUI(data.is_active);
                 showAlert(isActive ? '✅ ゲームを開始しました' : '✅ ゲームを終了しました');
             } catch (error) {
-                showAlert('❌ 状態の更新に失敗しました');
+                if (error.message !== 'Auth failed') showAlert('❌ 状態の更新に失敗しました');
             }
         }
 
         async function resetAll() {
             if (!await showConfirm('全てのリーダーボードをリセットしますか？\nこの操作は取り消せません。')) return;
             try {
-                const response = await fetch(`${API_URL}/reset`, {
-                    method: 'POST',
-                    headers: ADMIN_HEADERS
-                });
+                const response = await adminFetch(`${API_URL}/reset`, { method: 'POST' });
                 if (response.ok) {
                     showAlert('✅ リーダーボードをリセットしました');
                 } else {
                     showAlert('❌ リセットに失敗しました');
                 }
             } catch (error) {
-                showAlert('❌ リセットに失敗しました');
+                if (error.message !== 'Auth failed') showAlert('❌ リセットに失敗しました');
             }
         }
 

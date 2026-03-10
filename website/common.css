@@ -300,6 +300,7 @@ dialog {
     padding: 24px;
     max-width: 400px;
     width: 90%;
+    margin: auto;
     font-family: var(--font-base);
     font-size: 14px;
     color: var(--color-text-default);
