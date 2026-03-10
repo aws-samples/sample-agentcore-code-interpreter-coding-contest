@@ -43,6 +43,14 @@ contents/
 uv run python -m pytest contents/<problem-name>/test_solver.py -v --rootdir=contents/<problem-name>
 ```
 
+### Webサイトプレビュー
+
+```bash
+python -m http.server 8080 -d website
+```
+
+http://localhost:8080 でWebサイトを確認できます。API連携は動作しませんが、スタイルの確認には十分です。
+
 ## デプロイ
 
 ```bash
