@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理画面</title>
     <link rel="stylesheet" href="common.css">
-    <script src="config.js"></script>
     <script src="components.js"></script>
 </head>
 <body>
@@ -38,18 +37,50 @@
         </div>
     </div>
 
-    <script>
-        const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
+    <dialog id="dlg">
+        <p id="dlg-msg"></p>
+        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+            <button class="btn" id="dlg-cancel" style="display:none;" onclick="this.closest('dialog').close()">キャンセル</button>
+            <button class="btn btn-primary" onclick="this.closest('dialog').close('ok')">OK</button>
+        </div>
+    </dialog>
 
-        // Basic Auth credentials (same as CloudFront auth)
-        // This page is already protected by Basic Auth, so the user has these credentials
+    <script>
+        const API_URL = '/api';
+
         const stored = sessionStorage.getItem('adminAuth');
         const auth = stored || (() => {
             const cred = prompt('管理者認証 (user:pass)');
             if (cred) sessionStorage.setItem('adminAuth', cred);
             return cred;
         })();
-        const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(auth || '') };
+
+        if (!auth) {
+            document.querySelector('.admin-panel').innerHTML =
+                '<p style="text-align:center;padding:40px;color:var(--color-text-tertiary);">管理者認証が必要です。ページを再読み込みしてください。</p>';
+            throw new Error('Not authenticated');
+        }
+
+        const ADMIN_HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa(auth) };
+
+        const dlg = document.getElementById('dlg');
+        const dlgMsg = document.getElementById('dlg-msg');
+        const dlgCancel = document.getElementById('dlg-cancel');
+
+        function showAlert(msg) {
+            dlgMsg.textContent = msg;
+            dlgCancel.style.display = 'none';
+            dlg.showModal();
+        }
+
+        function showConfirm(msg) {
+            return new Promise(resolve => {
+                dlgMsg.textContent = msg;
+                dlgCancel.style.display = '';
+                dlg.showModal();
+                dlg.onclose = () => resolve(dlg.returnValue === 'ok');
+            });
+        }
         
         const statusBadge = document.getElementById('statusBadge');
         const startBtn = document.getElementById('startBtn');
@@ -100,26 +131,26 @@
                 });
                 const data = await response.json();
                 updateUI(data.is_active);
-                alert(isActive ? '✅ ゲームを開始しました' : '✅ ゲームを終了しました');
+                showAlert(isActive ? '✅ ゲームを開始しました' : '✅ ゲームを終了しました');
             } catch (error) {
-                alert('❌ 状態の更新に失敗しました');
+                showAlert('❌ 状態の更新に失敗しました');
             }
         }
 
         async function resetAll() {
-            if (!confirm('全てのリーダーボードをリセットしますか？\nこの操作は取り消せません。')) return;
+            if (!await showConfirm('全てのリーダーボードをリセットしますか？\nこの操作は取り消せません。')) return;
             try {
                 const response = await fetch(`${API_URL}/reset`, {
                     method: 'POST',
                     headers: ADMIN_HEADERS
                 });
                 if (response.ok) {
-                    alert('✅ リーダーボードをリセットしました');
+                    showAlert('✅ リーダーボードをリセットしました');
                 } else {
-                    alert('❌ リセットに失敗しました');
+                    showAlert('❌ リセットに失敗しました');
                 }
             } catch (error) {
-                alert('❌ リセットに失敗しました');
+                showAlert('❌ リセットに失敗しました');
             }
         }
 
