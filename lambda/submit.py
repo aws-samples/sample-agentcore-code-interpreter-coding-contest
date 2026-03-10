@@ -13,7 +13,7 @@ game_state_table = dynamodb.Table(os.environ["GAME_STATE_TABLE"])
 code_interpreter_id = "aws.codeinterpreter.v1"
 problems_bucket = os.environ["PROBLEMS_BUCKET"]
 
-HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+HEADERS = {"Content-Type": "application/json"}
 
 RUNNER_CODE = """
 import unittest

@@ -1,7 +1,7 @@
 import json
 import os
 
-HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+HEADERS = {"Content-Type": "application/json"}
 
 
 def require_admin_auth(event):

@@ -1,4 +1,4 @@
-const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
+const API_URL = '/api';
 
 class ProblemPage {
     constructor(problemId) {

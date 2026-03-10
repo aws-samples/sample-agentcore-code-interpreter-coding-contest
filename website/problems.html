@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>問題</title>
     <link rel="stylesheet" href="common.css">
-    <script src="config.js"></script>
     <script src="components.js"></script>
 </head>
 <body>
@@ -29,10 +28,10 @@
     </div>
 
     <script>
-        const API_URL = window.API_CONFIG?.url || 'http://localhost:3000';
+        const API_URL = '/api';
 
         document.getElementById('api-endpoint').textContent =
-            (window.API_CONFIG?.url || 'デプロイ後に表示されます') + 'submit';
+            window.location.origin + '/api/submit';
 
         fetch('openapi.yaml')
             .then(r => r.text())

@@ -122,74 +122,52 @@ class ProgrammingContestStack(Stack):
         problems_bucket.grant_read(api_lambda)
 
         # API Gateway
-        api = aws_apigateway.RestApi(
-            self,
-            "ProgrammingContestApi",
-            default_cors_preflight_options=aws_apigateway.CorsOptions(
-                allow_origins=aws_apigateway.Cors.ALL_ORIGINS,
-                allow_methods=aws_apigateway.Cors.ALL_METHODS,
-                allow_headers=["Content-Type", "Authorization"],
-            ),
-        )
+        api = aws_apigateway.RestApi(self, "ProgrammingContestApi")
 
         api_integration = aws_apigateway.LambdaIntegration(api_lambda)
 
-        api.root.add_resource("submit").add_method("POST", aws_apigateway.LambdaIntegration(submit_lambda))
-        api.root.add_resource("leaderboard").add_method("GET", api_integration)
-        api.root.add_resource("problems").add_method("GET", api_integration)
-        api.root.add_resource("reset").add_method("POST", api_integration)
+        api_resource = api.root.add_resource("api")
+        api_resource.add_resource("submit").add_method("POST", aws_apigateway.LambdaIntegration(submit_lambda))
+        api_resource.add_resource("leaderboard").add_method("GET", api_integration)
+        api_resource.add_resource("problems").add_method("GET", api_integration)
+        api_resource.add_resource("reset").add_method("POST", api_integration)
 
-        game_state_resource = api.root.add_resource("game-state")
+        game_state_resource = api_resource.add_resource("game-state")
         game_state_resource.add_method("GET", api_integration)
         game_state_resource.add_method("POST", api_integration)
 
-        # CloudFront Functions for Basic Auth
-        basic_auth_function = aws_cloudfront.Function(
-            self,
-            "BasicAuthFunction",
-            code=aws_cloudfront.FunctionCode.from_inline(f"""\
-function handler(event) {{
-  var request = event.request;
-  var uri = request.uri;
-  if (uri !== '/admin.html' && !uri.endsWith('/admin.html')) return request;
-  var expected = 'Basic {auth_string}';
-  var auth = request.headers.authorization;
-  if (auth && auth.value === expected) return request;
-  return {{
-    statusCode: 401,
-    statusDescription: 'Unauthorized',
-    headers: {{ 'www-authenticate': {{ value: 'Basic realm="Admin Area"' }} }}
-  }};
-}}"""),
+        # CloudFront
+        api_origin = aws_cloudfront_origins.HttpOrigin(
+            f"{api.rest_api_id}.execute-api.{self.region}.amazonaws.com",
+            origin_path=f"/{api.deployment_stage.stage_name}",
         )
 
-        # CloudFront
         distribution = aws_cloudfront.Distribution(
             self,
             "WebsiteDistribution",
             default_behavior=aws_cloudfront.BehaviorOptions(
                 origin=aws_cloudfront_origins.S3Origin(website_bucket),
                 viewer_protocol_policy=aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-                function_associations=[
-                    aws_cloudfront.FunctionAssociation(
-                        function=basic_auth_function,
-                        event_type=aws_cloudfront.FunctionEventType.VIEWER_REQUEST,
-                    )
-                ],
             ),
+            additional_behaviors={
+                "/api/*": aws_cloudfront.BehaviorOptions(
+                    origin=api_origin,
+                    viewer_protocol_policy=aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    allowed_methods=aws_cloudfront.AllowedMethods.ALLOW_ALL,
+                    cache_policy=aws_cloudfront.CachePolicy.CACHING_DISABLED,
+                    origin_request_policy=aws_cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+                ),
+            },
             default_root_object="index.html",
         )
 
         # Deploy website + assets to Web Bucket
-        config_js = f"window.API_CONFIG = {{ url: '{api.url}' }};"
-
         aws_s3_deployment.BucketDeployment(
             self,
             "DeployWebsite",
             sources=[
                 aws_s3_deployment.Source.asset("website"),
                 aws_s3_deployment.Source.asset("build/assets"),
-                aws_s3_deployment.Source.data("config.js", config_js),
             ],
             destination_bucket=website_bucket,
             distribution=distribution,

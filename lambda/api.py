@@ -15,7 +15,7 @@ leaderboard_table = dynamodb.Table(os.environ["LEADERBOARD_TABLE"])
 game_state_table = dynamodb.Table(os.environ["GAME_STATE_TABLE"])
 problems_bucket = os.environ["PROBLEMS_BUCKET"]
 
-HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+HEADERS = {"Content-Type": "application/json"}
 
 
 def handler(event, context):
@@ -23,15 +23,15 @@ def handler(event, context):
     method = event.get("httpMethod", "")
 
     try:
-        if resource == "/leaderboard" and method == "GET":
+        if resource == "/api/leaderboard" and method == "GET":
             return _get_leaderboard()
-        elif resource == "/problems" and method == "GET":
+        elif resource == "/api/problems" and method == "GET":
             return _get_problems()
-        elif resource == "/game-state" and method == "GET":
+        elif resource == "/api/game-state" and method == "GET":
             return _get_game_state()
-        elif resource == "/game-state" and method == "POST":
+        elif resource == "/api/game-state" and method == "POST":
             return _require_auth_then(event, lambda: _set_game_state(event))
-        elif resource == "/reset" and method == "POST":
+        elif resource == "/api/reset" and method == "POST":
             return _require_auth_then(event, _reset_leaderboard)
         else:
             return _response(404, {"error": "Not found"})
