@@ -235,7 +235,7 @@ class ProgrammingContestStack(Stack):
             aws_s3_deployment.BucketDeployment(
                 self,
                 "DeployCtfEnv",
-                sources=[aws_s3_deployment.Source.asset(ctf_dir)],
+                sources=[aws_s3_deployment.Source.asset(ctf_dir, exclude=["generate.py"])],
                 destination_bucket=problems_bucket,
                 destination_key_prefix="ctf-env",
             )
