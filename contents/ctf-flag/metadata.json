@@ -3,7 +3,7 @@
   "order": 99,
   "enabled": true,
   "problem_set": [
-    "ctf"
+    "contest"
   ],
   "description": [
     "Code Interpreter のサンドボックス環境に隠されたフラグを見つけてください。",
