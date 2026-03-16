@@ -38,7 +38,7 @@ body {
 }
 
 .container {
-    max-width: 960px;
+    max-width: 1280px;
     margin: 0 auto;
     background: var(--color-bg-main);
     border-radius: var(--radius-container);
