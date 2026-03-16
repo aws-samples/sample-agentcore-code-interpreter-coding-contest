@@ -6,6 +6,8 @@ Usage:
         --admin-auth=user:pass
 """
 
+import time
+
 import httpx
 import pytest
 
@@ -13,7 +15,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _game_active(base_url, admin_headers):
     """Ensure game is active for submit tests, clean up after."""
-    httpx.post(f"{base_url}/api/game-state", headers=admin_headers, json={"is_active": True})
+    httpx.post(f"{base_url}/api/game-state", headers=admin_headers, json={"is_active": True, "problem_set": "practice"})
     yield
     httpx.post(f"{base_url}/api/game-state", headers=admin_headers, json={"is_active": False})
 
@@ -40,6 +42,7 @@ class TestSubmitCorrectness:
     def test_duplicate_correct_answer(self, base_url):
         payload = {"username": "integ-test-dup", "problem_id": "prime-check", "code": "def solver(n):\n    if n < 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True"}
         httpx.post(f"{base_url}/api/submit", json=payload, timeout=60)
+        time.sleep(11)  # Wait for rate limit cooldown
         r = httpx.post(f"{base_url}/api/submit", json=payload, timeout=60)
         assert r.status_code == 200
         assert "Already solved" in r.json()["message"]

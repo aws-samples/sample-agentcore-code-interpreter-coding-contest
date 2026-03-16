@@ -12,6 +12,8 @@ Amazon Bedrock AgentCore Code Interpreterを活用したサンドボックスで
 - **リアルタイムリーダーボード**: CloudFront + S3でホストされる自動更新型のWebインターフェース
 - **RESTful API**: コード提出、順位取得、ゲーム状態管理のためのAPI Gateway統合
 - **カスタマイズ可能な問題セット**: ディレクトリベースの問題定義で簡単に問題を追加・編集可能
+- **CTF（Capture The Flag）**: 探索用エンドポイント（`/api/explore`）によるサンドボックス環境の自由探索
+- **レート制限**: username単位のリクエスト制限（`/api/submit`、`/api/explore`）
 - **Basic認証**: 管理画面へのアクセス制御
 
 ## 問題定義
@@ -36,6 +38,22 @@ contents/
 - ディレクトリ名がそのまま問題ID（`problem_id`）になります
 - `solver.py` はローカル検証専用で、デプロイされません
 - `test_solver.py` は `unittest` 形式で、Code Interpreter上で採点に使用されます
+
+### CTF問題
+
+CTF（Capture The Flag）形式の問題では、参加者が `/api/explore` エンドポイントを使ってサンドボックス環境を自由に探索し、隠されたフラグを見つけます。
+
+```
+ctf/                        # S3の ctf-env/ プレフィックスにデプロイされる
+├── .flag                   # 暗号化されたフラグ（バイナリ）
+├── env.json                # 環境変数定義（探索環境のファイルシステムには配置されない）
+└── README.txt              # ヒント
+```
+
+- `ctf/` 配下のファイルは Problems Bucket の `ctf-env/` プレフィックスにデプロイされます
+- `env.json` は explore Lambda が読み取り、`os.environ` にセットします（`writeFiles` では配置しないため、参加者は `cat env.json` で直接読めません）
+- それ以外のファイル（`.flag`, `README.txt` 等）は `writeFiles` でサンドボックスに配置されます
+- フラグの採点は通常の問題と同じく `contents/ctf-flag/test_solver.py` で行います
 
 ### ローカル検証
 
@@ -75,6 +93,7 @@ graph TB
     S3Problems[S3 Bucket<br/>問題データ]
     APIGW[API Gateway]
     SubmitLambda[Submit Lambda<br/>コード実行・採点]
+    ExploreLambda[Explore Lambda<br/>CTF探索]
     LeaderboardLambda[Leaderboard Lambda<br/>順位取得]
     ProblemsLambda[Problems Lambda<br/>問題一覧]
     ResetLambda[Reset Lambda<br/>リセット]
@@ -86,6 +105,7 @@ graph TB
     CF --> S3Web
     User -->|API Call| APIGW
     APIGW --> SubmitLambda
+    APIGW --> ExploreLambda
     APIGW --> LeaderboardLambda
     APIGW --> ProblemsLambda
     APIGW --> ResetLambda
@@ -93,6 +113,9 @@ graph TB
     SubmitLambda --> DDB1
     SubmitLambda --> DDB2
     SubmitLambda --> S3Problems
+    ExploreLambda --> CodeInterpreter
+    ExploreLambda --> DDB2
+    ExploreLambda --> S3Problems
     LeaderboardLambda --> DDB1
     LeaderboardLambda --> S3Problems
     ProblemsLambda --> DDB2

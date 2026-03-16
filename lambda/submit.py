@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import boto3
+from rate_limit import check_rate_limit
 
 dynamodb = boto3.resource("dynamodb")
 bedrock_agentcore = boto3.client("bedrock-agentcore")
@@ -112,6 +113,10 @@ def handler(event, context):
             return {"statusCode": 400, "headers": HEADERS, "body": json.dumps({"error": "Invalid problem_id."})}
         if not code or len(code) > MAX_CODE_SIZE:
             return {"statusCode": 400, "headers": HEADERS, "body": json.dumps({"error": "Invalid code."})}
+
+        rate_error = check_rate_limit(game_state_table, username)
+        if rate_error:
+            return rate_error
 
         metadata = _get_metadata(problem_id)
         if not metadata or not metadata.get("enabled", False):

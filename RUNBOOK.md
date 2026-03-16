@@ -65,6 +65,24 @@ curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/submit \
   }'
 ```
 
+### 探索コマンド凡例（CTF用 API）
+
+```bash
+curl -X POST https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/explore \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "<username>",
+    "code": "print(\"hello\")"
+  }'
+```
+
+レスポンス:
+```json
+{"stdout": "hello", "stderr": "", "exit_code": 0}
+```
+
+**注意**: `/api/submit` と `/api/explore` にはusername単位のレート制限（デフォルト10秒）があります。
+
 ---
 
 ## 問題編集方法
@@ -163,6 +181,48 @@ def solver():
 "description": [
   "<img src=\"problem-id/assets/image.png\" alt=\"説明\" style=\"max-width: 100%;\">"
 ]
+```
+
+### CTF問題の作成
+
+CTF問題は通常の問題とは異なり、参加者が `/api/explore` でサンドボックス環境を探索してフラグを見つける形式です。
+
+#### 1. 探索環境の準備（`ctf/` ディレクトリ）
+
+```
+ctf/
+├── .flag         ← 暗号化されたフラグ（バイナリ）
+├── env.json      ← 環境変数定義（explore Lambda が読み取り、writeFiles では配置しない）
+└── README.txt    ← ヒント（任意）
+```
+
+- `env.json` はサンドボックスのファイルシステムには配置されず、`os.environ` にセットされます
+- それ以外のファイルはサンドボックスに配置され、参加者が自由に読めます
+- バイナリファイルは `executeCode` 経由で base64 デコードして配置されます（`writeFiles` の `blob` が正しく動作しないため）
+
+#### 2. 採点用問題の作成（`contents/ctf-flag/`）
+
+通常の問題と同じ構造で、`test_solver.py` でフラグ文字列を検証します:
+
+```python
+# contents/ctf-flag/test_solver.py
+import unittest
+from solver import solver
+
+class TestSolver(unittest.TestCase):
+    def test_flag(self):
+        self.assertEqual(solver(), "FLAG{your_flag_here}")
+```
+
+#### 3. フラグの暗号化例（XOR方式）
+
+```python
+import os, base64
+flag = b"FLAG{your_flag_here}"
+key = os.urandom(len(flag))
+encrypted = bytes(a ^ b for a, b in zip(flag, key))
+# encrypted → ctf/.flag（バイナリ書き込み）
+# base64.b64encode(key).decode() → ctf/env.json の SECRET_KEY
 ```
 
 ### サンプル問題解説
@@ -274,17 +334,11 @@ timeout=Duration.seconds(30)  # Lambda全体
 - 実行時間: 30秒
 - Code Interpreterセッション: 1提出1セッション
 
-#### 3. レート制限（推奨）
-API Gatewayにスロットリング設定：
-```python
-api = apigw.RestApi(
-    self, "ProgrammingContestApi",
-    deploy_options=apigw.StageOptions(
-        throttling_rate_limit=10,  # 秒間10リクエスト
-        throttling_burst_limit=20
-    )
-)
-```
+#### 3. レート制限
+`/api/submit` と `/api/explore` にはusername単位のレート制限が実装されています。
+- クールダウン: 環境変数 `RATE_LIMIT_COOLDOWN`（デフォルト10秒）
+- 制限中は HTTP 429 を返却（`retry_after` フィールド付き）
+- GameState テーブルの `rate:{username}` キーで管理
 
 #### 4. 監視とアラート
 CloudWatch Logsで異常検知：

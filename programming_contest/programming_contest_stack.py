@@ -1,4 +1,5 @@
 import base64
+import os
 
 from aws_cdk import (
     CfnOutput,
@@ -95,10 +96,38 @@ class ProgrammingContestStack(Stack):
                 "LEADERBOARD_TABLE": leaderboard_table.table_name,
                 "GAME_STATE_TABLE": game_state_table.table_name,
                 "PROBLEMS_BUCKET": problems_bucket.bucket_name,
+                "RATE_LIMIT_COOLDOWN": "10",
             },
         )
 
         submit_lambda.add_to_role_policy(
+            aws_iam.PolicyStatement(
+                actions=[
+                    "bedrock-agentcore:StartCodeInterpreterSession",
+                    "bedrock-agentcore:InvokeCodeInterpreter",
+                    "bedrock-agentcore:StopCodeInterpreterSession",
+                ],
+                resources=[
+                    f"arn:aws:bedrock-agentcore:{self.region}:aws:code-interpreter/aws.codeinterpreter.v1"
+                ],
+            )
+        )
+
+        explore_lambda = aws_lambda.Function(
+            self,
+            "ExploreFunction",
+            runtime=aws_lambda.Runtime.PYTHON_3_11,
+            handler="explore.handler",
+            code=aws_lambda.Code.from_asset("lambda"),
+            timeout=Duration.seconds(30),
+            environment={
+                "GAME_STATE_TABLE": game_state_table.table_name,
+                "PROBLEMS_BUCKET": problems_bucket.bucket_name,
+                "RATE_LIMIT_COOLDOWN": "10",
+            },
+        )
+
+        explore_lambda.add_to_role_policy(
             aws_iam.PolicyStatement(
                 actions=[
                     "bedrock-agentcore:StartCodeInterpreterSession",
@@ -128,12 +157,15 @@ class ProgrammingContestStack(Stack):
 
         # Permissions
         leaderboard_table.grant_read_write_data(submit_lambda)
-        game_state_table.grant_read_data(submit_lambda)
+        game_state_table.grant_read_write_data(submit_lambda)
         problems_bucket.grant_read(submit_lambda)
 
         leaderboard_table.grant_read_write_data(api_lambda)
         game_state_table.grant_read_write_data(api_lambda)
         problems_bucket.grant_read(api_lambda)
+
+        game_state_table.grant_read_write_data(explore_lambda)
+        problems_bucket.grant_read(explore_lambda)
 
         # API Gateway
         api = aws_apigateway.RestApi(self, "ProgrammingContestApi")
@@ -142,6 +174,7 @@ class ProgrammingContestStack(Stack):
 
         api_resource = api.root.add_resource("api")
         api_resource.add_resource("submit").add_method("POST", aws_apigateway.LambdaIntegration(submit_lambda))
+        api_resource.add_resource("explore").add_method("POST", aws_apigateway.LambdaIntegration(explore_lambda))
         api_resource.add_resource("leaderboard").add_method("GET", api_integration)
         api_resource.add_resource("problems").add_method("GET", api_integration)
         api_resource.add_resource("reset").add_method("POST", api_integration)
@@ -195,6 +228,17 @@ class ProgrammingContestStack(Stack):
             sources=[aws_s3_deployment.Source.asset("build/problems")],
             destination_bucket=problems_bucket,
         )
+
+        # Deploy CTF environment files to Problems Bucket under ctf-env/ prefix
+        ctf_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ctf")
+        if os.path.isdir(ctf_dir):
+            aws_s3_deployment.BucketDeployment(
+                self,
+                "DeployCtfEnv",
+                sources=[aws_s3_deployment.Source.asset(ctf_dir)],
+                destination_bucket=problems_bucket,
+                destination_key_prefix="ctf-env",
+            )
 
         # Outputs
         CfnOutput(self, "ApiUrl", value=api.url)

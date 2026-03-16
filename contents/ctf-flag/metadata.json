@@ -1,0 +1,26 @@
+{
+  "title": "CTF: Hidden Flag",
+  "order": 99,
+  "enabled": true,
+  "problem_set": [
+    "ctf"
+  ],
+  "description": [
+    "Code Interpreter のサンドボックス環境に隠されたフラグを見つけてください。",
+    "",
+    "探索には <strong>POST /api/explore</strong> エンドポイントを使用します。",
+    "リクエストボディに username と code を JSON で渡すと、stdout/stderr が返されます。",
+    "",
+    "フラグを見つけたら、それを返す solver() 関数を /api/submit に提出してください。"
+  ],
+  "examples": [
+    {
+      "input": "POST /api/explore",
+      "output": "{\"username\": \"your-name\", \"code\": \"print('hello')\"}"
+    },
+    {
+      "input": "solver()",
+      "output": "\"FLAG{...}\""
+    }
+  ]
+}
