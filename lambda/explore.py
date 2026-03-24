@@ -212,7 +212,7 @@ def handler(event, context):
                         codeInterpreterIdentifier=code_interpreter_id,
                         sessionId=session_id,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Failed to stop session {session_id}: {e}")
     except Exception as e:
         return {"statusCode": 500, "headers": HEADERS, "body": json.dumps({"error": str(e)})}

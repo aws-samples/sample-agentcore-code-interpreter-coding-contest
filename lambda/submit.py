@@ -92,8 +92,8 @@ def _run_tests(user_code, test_code):
                     codeInterpreterIdentifier=code_interpreter_id,
                     sessionId=session_id,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Failed to stop session {session_id}: {e}")
 
 
 def handler(event, context):
@@ -146,14 +146,16 @@ def handler(event, context):
 
         # Parse "passed/total" format
         parts = result_str.split("/")
-        if len(parts) != 2:
+        try:
+            if len(parts) != 2:
+                raise ValueError
+            passed, total = int(parts[0]), int(parts[1])
+        except (ValueError, TypeError):
             return {
                 "statusCode": 200,
                 "headers": HEADERS,
                 "body": json.dumps({"result": "error", "message": "Unexpected output format."}),
             }
-
-        passed, total = int(parts[0]), int(parts[1])
         is_correct = passed == total
 
         if is_correct:
